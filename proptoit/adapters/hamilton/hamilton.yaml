@@ -1,0 +1,60 @@
+# Hamilton County, TN — reference county adapter.
+#
+# Six CountyConfig fields (name, state, parcel_table, assessor_url,
+# gis_endpoints, field_map) are consumed by CountyConfig.from_yaml;
+# everything below is adapter extra consumed by
+# proptoit.adapters.hamilton.get_extras().
+name: hamilton
+state: TN
+parcel_table: properties
+
+# Assessor site (Blazor SPA; search results render as div.trRes rows).
+assessor_url: https://assessor.hamiltontn.gov/search
+
+# Hamilton County GIS REST endpoints (ArcGIS MapServer).
+gis_endpoints:
+  parcels_query: https://mapsdev.hamiltontn.gov/hcwa03/rest/services/Live_Parcels/MapServer/0/query
+  live_real_property: https://mapsdev.hamiltontn.gov/hcwa03/rest/services/Live_RealProperty/MapServer
+
+# Assessor search-result column order (div.tableLinks cell index per field),
+# per collectors/hamilton/assessor.py:
+#   [0] Parcel ID  [1] Address  [2] Owner  [3] Year Built  [4] Assessed Value
+#   [5] Bldg Sqft  [6] Property Type  [7] Sale Date  [8] Sale Price  [9] Book/Page
+field_map:
+  parcel_id: 0
+  address: 1
+  owner_of_record: 2
+  year_built: 3
+  assessed_value: 4
+  building_sqft: 5
+  property_type: 6
+  last_sale_date: 7
+  last_sale_price: 8
+  book_page: 9
+
+# ---- Adapter extras -------------------------------------------------------
+
+# Parcel rows default to these when the assessor page doesn't carry them.
+city: Chattanooga
+default_postal_code: "37401"
+
+# Assessor detail ("property card") URL prefix; parcel id is appended.
+assessor_card_url: https://assessor.hamiltontn.gov/card
+
+# CURRENTUSE code -> property_category (collectors/hamilton/enrich_property_category.py).
+category_map:
+  RS: residential
+  0CR: residential
+  DU: residential    # Duplex
+  0AC: residential   # Likely residential variant
+  CO: commercial
+  IN: commercial
+  MF: commercial
+  0EC: commercial
+  OSAP: commercial   # Utilities/infrastructure
+  0RI: commercial    # Industrial
+  EID: commercial
+  EX: exempt
+  0ER: exempt
+  0CE: exempt        # Religious/charitable organizations
+  AG: agricultural

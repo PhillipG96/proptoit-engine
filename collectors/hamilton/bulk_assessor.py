@@ -15,9 +15,18 @@ from playwright.async_api import async_playwright, TimeoutError as PlaywrightTim
 from dotenv import load_dotenv
 load_dotenv()
 
+from collectors.base import get_county_config
+from proptoit.adapters.hamilton import get_extras
+
+# Hamilton County specifics come from the committed adapter YAML
+# (proptoit/adapters/hamilton/hamilton.yaml) — edit there, not here.
+_CFG = get_county_config()
+FM = _CFG.field_map
+_EXTRAS = get_extras()
+
 log = logging.getLogger(__name__)
 DB_DSN = os.getenv("DATABASE_URL", "postgresql://proptoit:***@localhost:5432/proptoit")
-BASE_URL = "https://assessor.hamiltontn.gov/search"
+BASE_URL = _CFG.assessor_url
 STREETS_PATH = os.path.expanduser("~/proptoit/data/streets.json")
 PROGRESS_FILE = os.path.expanduser("~/proptoit/data/bulk_progress.json")
 
@@ -61,21 +70,21 @@ async def scrape_street(page, street):
         for i in range(count):
             row = rows.nth(i)
             try:
-                pid = await cell_text(row, 0)
-                addr = await cell_text(row, 1)
+                pid = await cell_text(row, FM["parcel_id"])
+                addr = await cell_text(row, FM["address"])
                 if not pid or not addr: continue
-                owner = await cell_text(row, 2)
-                yb = await cell_text(row, 3)
-                av = await cell_text(row, 4)
-                bsq = await cell_text(row, 5)
-                sd = await cell_text(row, 7)
-                sp = await cell_text(row, 8)
-                pc = "37401"
+                owner = await cell_text(row, FM["owner_of_record"])
+                yb = await cell_text(row, FM["year_built"])
+                av = await cell_text(row, FM["assessed_value"])
+                bsq = await cell_text(row, FM["building_sqft"])
+                sd = await cell_text(row, FM["last_sale_date"])
+                sp = await cell_text(row, FM["last_sale_price"])
+                pc = _EXTRAS["default_postal_code"]
                 m = re.search(r"\b(3[67]\d{3})\b", addr)
                 if m: pc = m.group(1)
                 records.append({
-                    "parcel_id": pid, "address": addr, "city": "Chattanooga",
-                    "state": "TN", "postal_code": pc, "owner_of_record": owner or None,
+                    "parcel_id": pid, "address": addr, "city": _EXTRAS["city"],
+                    "state": _CFG.state, "postal_code": pc, "owner_of_record": owner or None,
                     "assessed_value": parse_number(av), "year_built": parse_int(yb),
                     "building_sqft": parse_number(bsq), "last_sale_price": parse_number(sp),
                     "last_sale_date": parse_date(sd),
@@ -90,10 +99,10 @@ async def scrape_street(page, street):
         except Exception: break
     return records
 
-UPSERT = """
-INSERT INTO properties (county_id,parcel_id,address,city,state,postal_code,owner_of_record,
+_UPSERT_TMPL = """
+INSERT INTO {table} (county_id,parcel_id,address,city,state,postal_code,owner_of_record,
     assessed_value,year_built,building_sqft,last_sale_price,last_sale_date,updated_at)
-VALUES ('hamilton',%(parcel_id)s,%(address)s,%(city)s,%(state)s,%(postal_code)s,%(owner_of_record)s,
+VALUES (%(county_id)s,%(parcel_id)s,%(address)s,%(city)s,%(state)s,%(postal_code)s,%(owner_of_record)s,
     %(assessed_value)s,%(year_built)s,%(building_sqft)s,%(last_sale_price)s,%(last_sale_date)s,NOW())
 ON CONFLICT (county_id,parcel_id) DO UPDATE SET
     address=EXCLUDED.address,owner_of_record=EXCLUDED.owner_of_record,
@@ -102,11 +111,14 @@ ON CONFLICT (county_id,parcel_id) DO UPDATE SET
     last_sale_date=EXCLUDED.last_sale_date,updated_at=NOW()
 """
 
+UPSERT = _UPSERT_TMPL.format(table=_CFG.parcel_table)
+
 def upsert(conn, data, dry):
     if not data.get("parcel_id") or not data.get("address"): return False
     row = {k: data.get(k) for k in ["parcel_id","address","city","state","postal_code",
         "owner_of_record","assessed_value","year_built","building_sqft",
         "last_sale_price","last_sale_date"]}
+    row["county_id"] = _CFG.name
     if dry:
         log.info("[DRY] %s %s", row["parcel_id"], row["address"])
         return True

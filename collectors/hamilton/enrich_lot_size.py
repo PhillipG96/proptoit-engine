@@ -15,14 +15,23 @@ import re
 import sys
 
 import psycopg2
-from playwright.async_api import async_playwright, Page
 
 from dotenv import load_dotenv
 load_dotenv()
 
-DB_DSN = os.getenv("DATABASE_URL", "postgresql://proptoit:***@localhost:5432/proptoit")
+from collectors.base import get_county_config
+from proptoit.adapters.hamilton import get_extras
 
+# Hamilton County specifics come from the committed adapter YAML
+# (proptoit/adapters/hamilton/hamilton.yaml) — edit there, not here.
+_CFG = get_county_config()
+ASSESSOR_CARD_URL = get_extras()["assessor_card_url"]
+PARCEL_TABLE = _CFG.parcel_table
+
+# playwright belongs to the private deployment (see requirements.txt note);
+# import it lazily so this module is usable (fetch/classify paths) without it.
 log = logging.getLogger(__name__)
+DB_DSN = os.getenv("DATABASE_URL", "postgresql://proptoit:***@localhost:5432/proptoit")
 
 
 def extract_lot_acres(text: str) -> float | None:
@@ -43,12 +52,12 @@ def extract_lot_acres(text: str) -> float | None:
     return None
 
 
-async def get_lot_size_from_detail(page: Page, parcel_id: str) -> float | None:
+async def get_lot_size_from_detail(page: "Page", parcel_id: str) -> float | None:
     """Navigate to assessor detail page and extract lot size in sqft."""
     try:
         encoded = parcel_id.replace(" ", "%20")
         await page.goto(
-            f"https://assessor.hamiltontn.gov/card/{encoded}",
+            f"{ASSESSOR_CARD_URL}/{encoded}",
             wait_until="domcontentloaded",
             timeout=15000,
         )
@@ -65,15 +74,25 @@ async def get_lot_size_from_detail(page: Page, parcel_id: str) -> float | None:
         return None
 
 
-async def enrich(conn, streets: list[str] | None, limit: int, dry_run: bool) -> int:
-    """Fetch parcel_ids with NULL lot_size, enrich from detail pages, upsert."""
-    # Get parcels needing enrichment
+def get_parcels_missing_lot_size(conn, limit: int | None = None) -> list[str]:
+    """Read parcel_ids with NULL lot_size_sqft from Postgres (read-only)."""
     with conn.cursor() as cur:
-        query = "SELECT parcel_id FROM properties WHERE lot_size_sqft IS NULL ORDER BY parcel_id"
+        query = (
+            f"SELECT parcel_id FROM {PARCEL_TABLE} "
+            "WHERE lot_size_sqft IS NULL ORDER BY parcel_id"
+        )
         if limit:
             query += f" LIMIT {limit}"
         cur.execute(query)
-        parcel_ids = [row[0] for row in cur.fetchall()]
+        return [row[0] for row in cur.fetchall()]
+
+
+async def enrich(conn, streets: list[str] | None, limit: int, dry_run: bool) -> int:
+    """Fetch parcel_ids with NULL lot_size, enrich from detail pages, upsert."""
+    from playwright.async_api import async_playwright  # lazy scraper dep
+
+    # Get parcels needing enrichment
+    parcel_ids = get_parcels_missing_lot_size(conn, limit or None)
 
     log.info("Found %d parcels with NULL lot_size", len(parcel_ids))
     if not parcel_ids:

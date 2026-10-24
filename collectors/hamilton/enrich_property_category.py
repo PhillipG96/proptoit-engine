@@ -28,27 +28,16 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-import requests
+from collectors.base import get_county_config
+from proptoit.adapters.hamilton import get_extras
 
-GIS_URL = "https://mapsdev.hamiltontn.gov/hcwa03/rest/services/Live_Parcels/MapServer/0/query"
+import requests  # noqa: E402  (used in query_gis_current_use)
 
-CATEGORY_MAP = {
-    "RS":  "residential",
-    "0CR": "residential",
-    "DU":  "residential",  # Duplex
-    "0AC": "residential",  # Likely residential variant
-    "CO":  "commercial",
-    "IN":  "commercial",
-    "MF":  "commercial",
-    "0EC": "commercial",
-    "OSAP": "commercial",  # Utilities/infrastructure
-    "0RI": "commercial",   # Industrial
-    "EID": "commercial",
-    "EX":  "exempt",
-    "0ER": "exempt",
-    "0CE": "exempt",  # Religious/charitable organizations
-    "AG":  "agricultural",
-}
+# Hamilton County specifics come from the committed adapter YAML
+# (proptoit/adapters/hamilton/hamilton.yaml) — edit there, not here.
+_CFG = get_county_config()
+GIS_URL = _CFG.gis_endpoints["parcels_query"]
+CATEGORY_MAP = get_extras()["category_map"]
 
 DSN = os.getenv("DATABASE_URL", "postgresql://proptoit:***@localhost:5432/proptoit")
 

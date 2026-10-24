@@ -25,6 +25,19 @@ import os
 from datetime import datetime, timezone
 
 
+def get_county_config(name=None):
+    """Return the CountyConfig for `name` (default: PROPTOIT_COUNTY env,
+    else the hamilton reference adapter).
+
+    Collectors should read county-specific constants (assessor URL, GIS
+    endpoints, parcel table, field maps) from here instead of hardcoding
+    them, so new counties only need a new adapter package.
+    """
+    from proptoit.county_config import load_county_config
+
+    return load_county_config(name)
+
+
 def get_scraped_at():
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
