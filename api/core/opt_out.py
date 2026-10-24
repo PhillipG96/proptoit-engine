@@ -10,7 +10,15 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-DB_DSN = os.environ.get("DATABASE_URL", "postgresql://proptoit:***@localhost:5432/proptoit")
+def _db_dsn() -> str:
+    """Resolve the DSN at call time; no default DSN is shipped (env-only)."""
+    dsn = os.getenv("DATABASE_URL")
+    if not dsn:
+        raise RuntimeError(
+            "DATABASE_URL not set — opt-out endpoints require an explicit DSN "
+            "(no default is shipped; ADR 0004 decommissions the old prod port)."
+        )
+    return dsn
 
 router = APIRouter()
 
@@ -68,7 +76,7 @@ def sanitize_input(value: str) -> str:
 def submit_opt_out(req: OptOutRequest, request: _Request) -> Dict[str, str]:
     """Submit an opt-out request."""
     _optout_rate_limit(request)
-    conn = psycopg2.connect(DB_DSN)
+    conn = psycopg2.connect(_db_dsn())
     cur = conn.cursor(cursor_factory=RealDictCursor)
     cur.execute("""
         INSERT INTO opt_out_requests (owner_name, email, phone, property_address, parcel_id, reason)
@@ -86,7 +94,7 @@ def submit_opt_out(req: OptOutRequest, request: _Request) -> Dict[str, str]:
 def verify_opt_out(req: OptOutVerifyRequest, request: _Request) -> dict:
     """Check if a property owner has opted out."""
     _optout_rate_limit(request)
-    conn = psycopg2.connect(DB_DSN)
+    conn = psycopg2.connect(_db_dsn())
     cur = conn.cursor(cursor_factory=RealDictCursor)
     conditions = []
     params = []
@@ -127,7 +135,7 @@ def verify_opt_out(req: OptOutVerifyRequest, request: _Request) -> dict:
 @router.get("/api/opt-out/count")
 def opt_out_count() -> Dict[str, int]:
     """Get total opt-out count."""
-    conn = psycopg2.connect(DB_DSN)
+    conn = psycopg2.connect(_db_dsn())
     cur = conn.cursor()
     cur.execute("SELECT count(*) FROM opt_out_requests")
     count = cur.fetchone()[0]
