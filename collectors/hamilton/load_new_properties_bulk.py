@@ -20,7 +20,16 @@ from datetime import datetime
 
 import psycopg2
 
-DB_DSN = "host=localhost port=5433 dbname=proptoit user=postgres"
+def db_dsn() -> str:
+    """Resolve the target DSN at call time — no hardcoded default.
+
+    The operator must be explicit: export DATABASE_URL (e.g. from the repo
+    .env) before running. Fails loudly rather than guessing a target.
+    """
+    dsn = os.getenv("DATABASE_URL")
+    if not dsn:
+        raise SystemExit("DATABASE_URL environment variable is required (export it before running)")
+    return dsn
 
 log = logging.getLogger(__name__)
 
@@ -238,7 +247,7 @@ def run(csv_path, dry_run, limit=0):
     
     log.info("Loading CSV: %s", csv_path)
     
-    conn = psycopg2.connect(DB_DSN)
+    conn = psycopg2.connect(db_dsn())
     
     try:
         # Get existing DB addresses AND parcel IDs

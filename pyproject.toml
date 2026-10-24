@@ -35,4 +35,9 @@ proptoit = "proptoit.cli:main"
 # pro/ ships (gated at runtime by pro/license.py) so `from pro import
 # require_license` works in the installed CLI; api/ and collectors/ are driven
 # in place from the repo root (see _repo_root).
-packages = ["proptoit", "proptoit.adapters", "pro", "pro.triage"]
+packages = ["proptoit", "proptoit.adapters", "proptoit.adapters.hamilton", "pro", "pro.triage"]
+
+# hamilton.yaml ships inside the adapter package; county_config.load_county_config
+# reads it from the installed location (site-packages/proptoit/adapters/hamilton/).
+[tool.setuptools.package-data]
+"proptoit.adapters.hamilton" = ["*.yaml"]

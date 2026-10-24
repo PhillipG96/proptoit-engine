@@ -14,6 +14,7 @@ Source: https://www.hamiltontn.gov/Clerkmasterforms/taxsale/{year}TaxSale/DELINQ
 
 import re
 import json
+import os
 import sys
 import logging
 import argparse
@@ -32,8 +33,13 @@ log = logging.getLogger(__name__)
 # PDF URL pattern — matches the Clerk's naming convention
 PDF_URL = "https://www.hamiltontn.gov/Clerkmasterforms/taxsale/{year}TaxSale/DELINQUENT%20TAX%20SALE%20LIST%20{year}.pdf"
 
-# DB connection — use trust auth on localhost:5433
-DB_DSN = "postgresql://postgres@localhost:5433/proptoit"
+# DB connection — resolved at call time from DATABASE_URL (no hardcoded DSN;
+# the operator must be explicit; ADR 0004 decommissions the old prod port).
+def db_dsn() -> str:
+    dsn = os.getenv("DATABASE_URL")
+    if not dsn:
+        raise SystemExit("DATABASE_URL environment variable is required (export it before running)")
+    return dsn
 
 
 def download_pdf(url: str) -> bytes:
@@ -309,7 +315,7 @@ def main():
     
     # Connect to DB
     log.info("Connecting to database...")
-    conn = psycopg2.connect(DB_DSN)
+    conn = psycopg2.connect(db_dsn())
     conn.autocommit = False
     
     try:
