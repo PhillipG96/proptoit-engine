@@ -27,7 +27,16 @@ load_dotenv()
 
 sys.path.insert(0, "/home/magicofelipe/proptoit")
 
-DB_DSN = os.getenv("DATABASE_URL", "postgresql://proptoit:***@localhost:5432/proptoit")
+def db_dsn() -> str:
+    """Resolve the target DSN at call time — no hardcoded default.
+
+    The operator must be explicit: export DATABASE_URL (e.g. from the repo
+    .env) before running. Fails loudly rather than guessing a target.
+    """
+    dsn = os.getenv("DATABASE_URL")
+    if not dsn:
+        raise SystemExit("DATABASE_URL environment variable is required (export it before running)")
+    return dsn
 
 BASE_URL = "https://www.hamiltontn.gov/Clerkmasterforms/taxsale/{year}TaxSale/DELINQUENT%20TAX%20SALE%20LIST%20{year}.pdf"
 
@@ -288,7 +297,7 @@ def main():
 
         # Step 4 & 5: Match to properties and upsert
         print(f"\nMatching to properties and upserting signals...")
-        conn = psycopg2.connect(DB_DSN)
+        conn = psycopg2.connect(db_dsn())
         try:
             n = match_and_upsert(conn, entries, args.year, dry_run=args.dry_run)
             if args.dry_run:

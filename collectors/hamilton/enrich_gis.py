@@ -42,24 +42,20 @@ from typing import Any
 import psycopg2
 import psycopg2.extras
 import requests
-from pathlib import Path
+import os
 
 # ── Config ──────────────────────────────────────────────────────────────────
 
-def _load_db_dsn() -> str:
-    """Read DB password from .env file."""
-    env_path = Path(__file__).resolve().parent.parent.parent / ".env"
-    pw = None
-    if env_path.exists():
-        for line in env_path.read_text().splitlines():
-            if line.startswith("POSTGRES_PASSWORD="):
-                pw = line.split("=", 1)[1].strip()
-                break
-    if not pw:
-        raise RuntimeError("POSTGRES_PASSWORD not found in .env")
-    return f"postgresql://proptoit:{pw}@localhost:5432/proptoit"
+def db_dsn() -> str:
+    """Resolve the target DSN at call time — no hardcoded default.
 
-DB_DSN = _load_db_dsn()
+    The operator must be explicit: export DATABASE_URL (e.g. from the repo
+    .env) before running. Fails loudly rather than guessing a target.
+    """
+    dsn = os.getenv("DATABASE_URL")
+    if not dsn:
+        raise SystemExit("DATABASE_URL environment variable is required (export it before running)")
+    return dsn
 
 GIS_URL = (
     "https://mapsdev.hamiltontn.gov/hcwa03/rest/services/"
@@ -336,7 +332,7 @@ def process_gis_attrs(attrs: dict) -> dict:
 
 def run_enrichment(mode: str, batch_size: int, limit: int | None, delay: float, dry_run: bool):
     """Main enrichment loop."""
-    conn = psycopg2.connect(DB_DSN)
+    conn = psycopg2.connect(db_dsn())
     try:
         parcel_ids = get_parcels(conn, mode, limit)
         total = len(parcel_ids)

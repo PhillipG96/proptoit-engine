@@ -12,7 +12,16 @@ import psycopg2
 from dotenv import load_dotenv
 load_dotenv()
 
-DB_DSN = os.getenv("DATABASE_URL", "postgresql://proptoit:***@localhost:5432/proptoit")
+def db_dsn() -> str:
+    """Resolve the target DSN at call time — no hardcoded default.
+
+    The operator must be explicit: export DATABASE_URL (e.g. from the repo
+    .env) before running. Fails loudly rather than guessing a target.
+    """
+    dsn = os.getenv("DATABASE_URL")
+    if not dsn:
+        raise SystemExit("DATABASE_URL environment variable is required (export it before running)")
+    return dsn
 
 # Use Geoapify reverse geocoding (free tier: 30,000 requests/day, no key needed for basic)
 # Or use US Census ZIP lookup by lat/lng
@@ -24,7 +33,7 @@ DB_DSN = os.getenv("DATABASE_URL", "postgresql://proptoit:***@localhost:5432/pro
 
 def get_missing():
     """Get properties with coords but no real ZIP."""
-    conn = psycopg2.connect(DB_DSN)
+    conn = psycopg2.connect(db_dsn())
     cur = conn.cursor()
     cur.execute("""
         SELECT id, parcel_id, lat, lng, address
@@ -64,7 +73,7 @@ def reverse_geocode_zip(lat, lng):
 
 def update_zips(results):
     """Bulk update ZIPs in DB."""
-    conn = psycopg2.connect(DB_DSN)
+    conn = psycopg2.connect(db_dsn())
     cur = conn.cursor()
     for db_id, postal_code in results:
         cur.execute("""
@@ -104,7 +113,7 @@ def main():
         print(f"\nUpdated {updated} properties with real ZIPs", flush=True)
 
     # Final count
-    conn = psycopg2.connect(DB_DSN)
+    conn = psycopg2.connect(db_dsn())
     cur = conn.cursor()
     cur.execute("""
         SELECT 

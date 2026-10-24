@@ -42,7 +42,16 @@ TFP_LEGAL_NOTICES_URL = (
 
 CACHE_PATH = "/tmp/proptoit/probate_notices.cache"
 
-DB_DSN = os.getenv("DATABASE_URL", "postgresql://proptoit:***@localhost:5432/proptoit")
+def db_dsn() -> str:
+    """Resolve the target DSN at call time — no hardcoded default.
+
+    The operator must be explicit: export DATABASE_URL (e.g. from the repo
+    .env) before running. Fails loudly rather than guessing a target.
+    """
+    dsn = os.getenv("DATABASE_URL")
+    if not dsn:
+        raise SystemExit("DATABASE_URL environment variable is required (export it before running)")
+    return dsn
 
 # Regex patterns
 # "NOTICE TO CREDITORS  ESTATE OF  DOUGLAS M. WHITAKER, SR. DECEDENT NO. 26-P-475"
@@ -335,7 +344,7 @@ def run(dry_run=False):
         )
 
     # Connect to DB
-    conn = psycopg2.connect(DB_DSN)
+    conn = psycopg2.connect(db_dsn())
     try:
         # Save notices to DB
         print("\n>>> Saving probate notices to database...")

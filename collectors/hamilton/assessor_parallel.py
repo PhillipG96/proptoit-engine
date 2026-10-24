@@ -20,7 +20,16 @@ from playwright.async_api import async_playwright, Page, TimeoutError as Playwri
 from dotenv import load_dotenv
 load_dotenv()
 
-DB_DSN = os.getenv("DATABASE_URL", "postgresql://proptoit:***@localhost:5432/proptoit")
+def db_dsn() -> str:
+    """Resolve the target DSN at call time — no hardcoded default.
+
+    The operator must be explicit: export DATABASE_URL (e.g. from the repo
+    .env) before running. Fails loudly rather than guessing a target.
+    """
+    dsn = os.getenv("DATABASE_URL")
+    if not dsn:
+        raise SystemExit("DATABASE_URL environment variable is required (export it before running)")
+    return dsn
 BASE_URL = "https://assessor.hamiltontn.gov/search"
 CHECKPOINT_FILE = Path.home() / ".hermes" / "cron" / "output" / "assessor_parallel_checkpoint.json"
 
@@ -271,7 +280,7 @@ def save_checkpoint(street: str):
 async def worker(context_idx: int, streets_slice: list[str], no_enrich: bool = False) -> int:
     """Scrape a slice of streets. Returns total records scraped."""
     # Each worker gets its own DB connection
-    conn = psycopg2.connect(DB_DSN)
+    conn = psycopg2.connect(db_dsn())
     
     async with async_playwright() as pw:
         browser = await pw.chromium.launch(headless=True)

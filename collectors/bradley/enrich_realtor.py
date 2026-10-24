@@ -31,7 +31,16 @@ load_dotenv(Path(__file__).resolve().parents[2] / ".env")
 
 log = logging.getLogger("bradley.realtor")
 
-DB_DSN = os.getenv("DATABASE_URL", "postgresql://proptoit@localhost:5432/proptoit")
+def db_dsn() -> str:
+    """Resolve the target DSN at call time — no hardcoded default.
+
+    The operator must be explicit: export DATABASE_URL (e.g. from the repo
+    .env) before running. Fails loudly rather than guessing a target.
+    """
+    dsn = os.getenv("DATABASE_URL")
+    if not dsn:
+        raise SystemExit("DATABASE_URL environment variable is required (export it before running)")
+    return dsn
 
 DIR_MAP = {
     "NORTH": "N", "SOUTH": "S", "EAST": "E", "WEST": "W",
@@ -233,7 +242,7 @@ def upsert_row(conn, row, dry_run: bool) -> bool:
 
 def run(dry_run: bool, limit: int, listing_types: list[str]):
     stats = {"scraped": 0, "matched": 0, "empty_batches": 0}
-    conn = psycopg2.connect(DB_DSN) if not dry_run else None
+    conn = psycopg2.connect(db_dsn()) if not dry_run else None
     try:
         for lt in listing_types:
             log.info("Scraping %s listings in Cleveland, TN (up to 5000)...", lt)

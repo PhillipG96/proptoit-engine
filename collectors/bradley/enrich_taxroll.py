@@ -32,7 +32,16 @@ load_dotenv(Path(__file__).resolve().parents[2] / ".env")
 import psycopg2  # noqa: E402
 import psycopg2.extras  # noqa: E402
 
-DB_DSN = os.getenv("DATABASE_URL", "postgresql://proptoit@localhost:5432/proptoit")
+def db_dsn() -> str:
+    """Resolve the target DSN at call time — no hardcoded default.
+
+    The operator must be explicit: export DATABASE_URL (e.g. from the repo
+    .env) before running. Fails loudly rather than guessing a target.
+    """
+    dsn = os.getenv("DATABASE_URL")
+    if not dsn:
+        raise SystemExit("DATABASE_URL environment variable is required (export it before running)")
+    return dsn
 
 LAYER_URL = (
     "https://services1.arcgis.com/Ev0M319ggvf3XvKr/"
@@ -99,7 +108,7 @@ UPDATE_SQL = """
 
 
 def run(dry_run: bool):
-    conn = psycopg2.connect(DB_DSN)
+    conn = psycopg2.connect(db_dsn())
     stats = {"fetched": 0, "updated": 0, "unmatched": 0, "zip_filled": 0}
     try:
         with conn.cursor() as cur:
@@ -153,7 +162,7 @@ def run(dry_run: bool):
         conn.close()
 
     # Post-checks
-    conn = psycopg2.connect(DB_DSN)
+    conn = psycopg2.connect(db_dsn())
     try:
         with conn.cursor() as cur:
             cur.execute("SELECT count(*) FROM properties WHERE county_id='bradley' AND postal_code IS NOT NULL")

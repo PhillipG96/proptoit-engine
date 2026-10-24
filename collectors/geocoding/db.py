@@ -10,7 +10,7 @@ from __future__ import annotations
 import psycopg2
 import psycopg2.extras
 
-from .config import DB_DSN
+from .config import db_dsn
 
 # target name -> WHERE predicate (county is parameterized separately)
 _TARGET_SQL = {
@@ -24,7 +24,9 @@ _TARGET_SQL = {
 }
 
 
-def get_conn(dsn: str = DB_DSN):
+def get_conn(dsn: str | None = None):
+    if dsn is None:
+        dsn = db_dsn()
     return psycopg2.connect(dsn)
 
 

@@ -2,7 +2,7 @@
 """Batch geocoder for the LIVE database — Hamilton County, TN.
 
 Writes coordinates to the converged docker Postgres database the API serves from
-(``localhost:5432``, ``county_id`` slug, native ``lat``/``lng`` plus ``point`` ``geocoords_point``).
+(``DATABASE_URL``-resolved DSN, ``county_id`` slug, native ``lat``/``lng`` plus ``point`` ``geocoords_point``).
 
 Strategy:
   1. US Census batch geocoder for numbered street addresses — free, no key,
@@ -41,7 +41,16 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # API-serving database. Env override matches the running API.
-DB_DSN = os.getenv("DATABASE_URL", "postgresql://proptoit:***@localhost:5432/proptoit")
+def db_dsn() -> str:
+    """Resolve the target DSN at call time — no hardcoded default.
+
+    The operator must be explicit: export DATABASE_URL (e.g. from the repo
+    .env) before running. Fails loudly rather than guessing a target.
+    """
+    dsn = os.getenv("DATABASE_URL")
+    if not dsn:
+        raise SystemExit("DATABASE_URL environment variable is required (export it before running)")
+    return dsn
 CHECKPOINT_FILE = "/home/magicofelipe/proptoit/.geocode_checkpoint"
 COUNTY_ID = "hamilton"
 COUNTY_NAME = "Hamilton County, TN"
@@ -118,7 +127,7 @@ def main(argv=None):
     print(f"BATCH GEOCODER — {COUNTY_NAME}  (live DB)")
     print("=" * 64)
 
-    conn = psycopg2.connect(DB_DSN)
+    conn = psycopg2.connect(db_dsn())
     try:
         pending = get_pending(conn, limit=args.limit)
         print(f"Pending (no coords, have address): {len(pending)}")

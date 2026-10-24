@@ -25,7 +25,16 @@ FM = _CFG.field_map
 _EXTRAS = get_extras()
 
 log = logging.getLogger(__name__)
-DB_DSN = os.getenv("DATABASE_URL", "postgresql://proptoit:***@localhost:5432/proptoit")
+def db_dsn() -> str:
+    """Resolve the target DSN at call time — no hardcoded default.
+
+    The operator must be explicit: export DATABASE_URL (e.g. from the repo
+    .env) before running. Fails loudly rather than guessing a target.
+    """
+    dsn = os.getenv("DATABASE_URL")
+    if not dsn:
+        raise SystemExit("DATABASE_URL environment variable is required (export it before running)")
+    return dsn
 BASE_URL = _CFG.assessor_url
 STREETS_PATH = os.path.expanduser("~/proptoit/data/streets.json")
 PROGRESS_FILE = os.path.expanduser("~/proptoit/data/bulk_progress.json")
@@ -176,7 +185,7 @@ def main():
     conn = None
     if not a.dry_run:
         try:
-            conn = psycopg2.connect(DB_DSN)
+            conn = psycopg2.connect(db_dsn())
             log.info("Connected")
         except Exception as e:
             log.error("DB: %s", e); sys.exit(1)

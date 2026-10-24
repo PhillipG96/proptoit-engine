@@ -28,7 +28,16 @@ Hamilton County assessor current_use codes:
 import os
 import psycopg2
 
-DB_DSN = os.environ.get("DATABASE_URL", "postgresql://proptoit:***@127.0.0.1:5432/proptoit")
+def db_dsn() -> str:
+    """Resolve the target DSN at call time — no hardcoded default.
+
+    The operator must be explicit: export DATABASE_URL (e.g. from the repo
+    .env) before running. Fails loudly rather than guessing a target.
+    """
+    dsn = os.getenv("DATABASE_URL")
+    if not dsn:
+        raise SystemExit("DATABASE_URL environment variable is required (export it before running)")
+    return dsn
 
 # current_use → property_category mapping
 USE_CODE_MAP = {
@@ -305,7 +314,7 @@ def main():
     print("Hamilton County Property Classification")
     print("=" * 60)
 
-    conn = psycopg2.connect(DB_DSN)
+    conn = psycopg2.connect(db_dsn())
     cur = conn.cursor()
 
     # Pre-classification stats

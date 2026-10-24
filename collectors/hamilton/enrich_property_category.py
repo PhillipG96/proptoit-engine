@@ -39,7 +39,16 @@ _CFG = get_county_config()
 GIS_URL = _CFG.gis_endpoints["parcels_query"]
 CATEGORY_MAP = get_extras()["category_map"]
 
-DSN = os.getenv("DATABASE_URL", "postgresql://proptoit:***@localhost:5432/proptoit")
+def db_dsn() -> str:
+    """Resolve the target DSN at call time — no hardcoded default.
+
+    The operator must be explicit: export DATABASE_URL (e.g. from the repo
+    .env) before running. Fails loudly rather than guessing a target.
+    """
+    dsn = os.getenv("DATABASE_URL")
+    if not dsn:
+        raise SystemExit("DATABASE_URL environment variable is required (export it before running)")
+    return dsn
 
 log = logging.getLogger(__name__)
 
@@ -47,7 +56,7 @@ log = logging.getLogger(__name__)
 def psql_t(query: str) -> str:
     """Run psql and return text output."""
     result = subprocess.run(
-        ["psql", DSN, "-t", "-c", query],
+        ["psql", db_dsn(), "-t", "-c", query],
         capture_output=True, text=True
     )
     if result.returncode != 0:
