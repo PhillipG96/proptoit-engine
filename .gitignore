@@ -1,0 +1,29 @@
+# Secrets & credentials
+.env
+.env.*
+*.pem
+*.key
+
+# Databases & data files
+*.db
+*.sqlite
+*.sqlite3
+data/
+logs/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+dist/
+build/
+*.egg-info/
+
+# Node
+node_modules/
+
+# Tooling / private workflow
+.superpowers/
+.DS_Store

@@ -1,0 +1,50 @@
+# PropToIt Docker Compose - Local Development
+# Plain PostgreSQL (NO PostGIS — unavailable on ARM64). Geospatial data is stored
+# in native lat/lng columns + a `point` geocoords_point; distance math is done in
+# Python (Euclidean), not ST_*. Schema is db/init.sql. This 5432 instance is the
+# single source of truth — see docs/adr/0004-single-database-on-5432.md.
+# Do not introduce a separate host DB.
+
+services:
+  postgis:
+    image: postgres:16-alpine
+    container_name: proptoit-postgis
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: proptoit
+      POSTGRES_USER: proptoit
+      # Set POSTGRES_PASSWORD in .env file (do NOT commit)
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - postgis_data:/var/lib/postgresql/data
+      - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U proptoit -d proptoit"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  meilisearch:
+    image: getmeili/meilisearch:v1.11
+    container_name: proptoit-meilisearch
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:7700:7700"
+    volumes:
+      - meili_data:/meili_data
+    environment:
+      MEILI_DB_PATH: /meili_data
+      MEILI_MASTER_KEY: ${MEILI_MASTER_KEY}
+    healthcheck:
+      test: ["CMD-SHELL", "curl -s http://localhost:7700/health | grep available"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgis_data:
+    external: true
+    name: proptoit-mvp_postgis_data
+  meili_data:
