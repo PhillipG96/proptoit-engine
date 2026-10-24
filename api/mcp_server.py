@@ -13,7 +13,7 @@ MCP client config (e.g. Claude Desktop / Claude Code):
         "mcpServers": {
             "proptoit": {
                 "command": "python",
-                "args": ["/home/magicofelipe/proptoit/api/mcp_server.py"]
+                "args": ["api/mcp_server.py"]   # run from the repo root
             }
         }
     }
@@ -22,6 +22,10 @@ import json
 import sys
 from pathlib import Path
 from typing import Optional, Any
+
+# Allow `from core import ...` whether run as a script (api/ is sys.path[0])
+# or imported as `api.mcp_server` from the repo root.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from dotenv import load_dotenv
 
@@ -283,42 +287,6 @@ def compare_properties(
 
 
 @mcp.tool()
-def get_top_deals(
-    limit: int = 25,
-    min_score: int = 50,
-    county_id: str = "hamilton",
-) -> str:
-    """Get highest deal_score properties — the hottest off-market opportunities.
-
-    Args:
-        limit: Max properties to return (default 25, cap 200).
-        min_score: Minimum deal_score filter (0-100, default 50).
-        county_id: County identifier (default 'hamilton').
-    """
-    capped = max(1, min(int(limit), 200))
-    capped_score = max(0, min(int(min_score), 100))
-    result = queries.get_top_deals(limit=capped, min_score=capped_score, county_id=county_id)
-    return json.dumps(result, indent=2, default=str)
-
-
-@mcp.tool()
-def get_property_analysis(
-    parcel_id: str,
-    county_id: str = "hamilton",
-) -> str:
-    """Get deal analysis breakdown for a single property: equity, distress, scoring components.
-
-    Args:
-        parcel_id: County parcel ID (exact match).
-        county_id: County identifier (default 'hamilton').
-    """
-    analysis = queries.get_property_analysis(parcel_id, county_id=county_id)
-    if not analysis:
-        return json.dumps({"error": "not_found", "parcelId": parcel_id})
-    return json.dumps(analysis, indent=2, default=str)
-
-
-@mcp.tool()
 def list_distressed_with_coords(
     signal_type: Optional[str] = None,
     limit: int = 100,
@@ -419,35 +387,6 @@ def get_foreclosure_stats(
         "upcoming": queries.count_foreclosures(status="upcoming", days_ahead=capped_days),
         "active": queries.count_foreclosures(status="active", days_ahead=capped_days),
     }, indent=2)
-
-
-@mcp.tool()
-def get_property_appraisal(
-    parcel_id: str,
-    radius: Optional[float] = None,
-    min_comps: int = 5,
-    county_id: str = "hamilton",
-) -> str:
-    """Get property appraisal (CMV + ARV) using comparable sales analysis.
-
-    Uses the properties database as a comp pool — finds comparable sales
-    within an adaptive radius, weights by distance and time decay, then
-    calculates Current Market Value (CMV) and After Repair Value (ARV).
-
-    Args:
-        parcel_id: County parcel ID (exact match).
-        radius: Search radius in miles (default: adaptive, starts 0.25mi, expands to 5mi).
-        min_comps: Minimum comparable sales needed (default: 5).
-        county_id: County identifier (default 'hamilton').
-    """
-    from core import appraisal
-    result = appraisal.full_appraisal(
-        parcel_id,
-        radius_miles=radius or 5.0,
-        min_comps=min_comps,
-        county_id=county_id,
-    )
-    return json.dumps(result, indent=2, default=str)
 
 
 @mcp.tool()

@@ -26,12 +26,11 @@ from .investor_models import (
     FeedbackAction, DigestLogResponse,
 )
 
-from .matching import match_deals_for_investor
+from api.core.matching import match_deals_for_investor
 from .deal_events import log_event
-from sanitize import (
+from api.sanitize import (
     sanitize_email, sanitize_name, sanitize_url_path,
 )
-from services.deal_package import stream_deal_package_pdf
 
 router = APIRouter(prefix="/investors", tags=["investors"])
 
@@ -354,130 +353,3 @@ def get_digests(investor_id: str, request: Request) -> List[DigestLogResponse]:
             ]
     finally:
         conn.close()
-
-
-# ── Deal Package (PDF) ────────────────────────────────────────────
-
-@router.get("/{investor_id}/deal-package")
-def get_deal_package_pdf(
-    request: Request,
-    investor_id: str,
-    parcel_id: str = Query(..., description="County parcel ID"),
-    county_id: str = Query(default="hamilton"),
-) -> Response:
-    """Generate and stream a one-page deal package PDF for a matched deal.
-
-    Returns the PDF as an inline download with branding, deal score,
-    financials, property details, distress signals, and rehab scope.
-    """
-    _require_investor_access(request, investor_id)
-    _require_investor(investor_id)
-    parcel_id = sanitize_url_path(parcel_id)
-    if not parcel_id:
-        raise HTTPException(status_code=400, detail="Invalid parcel_id")
-
-    # Log 'viewed' event (idempotent)
-    try:
-        log_event(investor_id, parcel_id, county_id, "viewed")
-    except Exception:
-        pass
-
-    try:
-        pdf_bytes, filename = stream_deal_package_pdf(parcel_id, county_id)
-    except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
-
-    return Response(
-        content=pdf_bytes,
-        media_type="application/pdf",
-        headers={
-            "Content-Disposition": f"inline; filename={filename}",
-            "Content-Length": str(len(pdf_bytes)),
-        },
-    )
-
-
-# ── Digest Generation ────────────────────────────────────────────
-
-@router.post("/{investor_id}/generate-digest")
-def generate_digest(investor_id: str, request: Request) -> Dict[str, Any]:
-    _require_investor_access(request, investor_id)
-    """Generate and send a digest for a specific investor immediately.
-
-    Runs the matching engine, generates PDFs, sends email, and logs the result.
-    """
-    _require_investor(investor_id)
-
-    from services.deal_package import assemble_deal_package
-    from services.email import send_digest_email
-    from core.matching import match_deals_for_investor
-    import json
-    from datetime import datetime
-
-    # 1. Run matching
-    try:
-        matches = match_deals_for_investor(investor_id)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Matching failed: {e}")
-
-    if not matches:
-        return {"status": "no_matches", "deal_count": 0}
-
-    # 2. Generate PDFs
-    pdf_attachments = []
-    deal_summaries = []
-    parcel_ids = []
-
-    for match in matches[:5]:
-        parcel_id = match.get("parcelId", "")
-        county_id = match.get("countyId", "hamilton")
-        try:
-            package = assemble_deal_package(parcel_id, county_id)
-            if "error" not in package:
-                deal_summaries.append(package["property"])
-                parcel_ids.append(parcel_id)
-                safe_parcel = parcel_id.replace("/", "_").replace("\\", "_")
-                pdf_attachments.append((f"Deal_{safe_parcel}.pdf", package["pdf_bytes"]))
-        except Exception:
-            pass
-
-    if not pdf_attachments:
-        return {"status": "no_pdfs", "deal_count": len(matches)}
-
-    # 3. Get investor email
-    investor = _require_investor(investor_id)
-    email = investor["email"]
-    full_name = investor.get("name") or email.split("@")[0]
-
-    # 4. Send email
-    sent = send_digest_email(
-        to_email=email,
-        investor_name=full_name,
-        deals=deal_summaries,
-        pdf_attachments=pdf_attachments,
-    )
-
-    # 5. Log
-    conn = _get_conn()
-    try:
-        with conn.cursor() as cur:
-            cur.execute("""
-                INSERT INTO digest_logs (investor_id, sent_at, deal_count, parcel_ids, delivery_status)
-                VALUES (%s, %s, %s, %s::jsonb, %s)
-            """, (
-                investor_id,
-                datetime.now(),
-                len(matches),
-                json.dumps(parcel_ids),
-                "sent" if sent else "failed",
-            ))
-        conn.commit()
-    finally:
-        conn.close()
-
-    return {
-        "status": "sent" if sent else "failed",
-        "deal_count": len(matches),
-        "pdf_count": len(pdf_attachments),
-        "parcel_ids": parcel_ids,
-    }

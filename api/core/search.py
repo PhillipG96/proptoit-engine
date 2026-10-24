@@ -22,12 +22,16 @@ router = APIRouter()
 MEILI_HOST = os.getenv("MEILI_HOST", "localhost")
 MEILI_PORT = int(os.getenv("MEILI_PORT", "7700"))
 MEILI_INDEX = os.getenv("MEILI_INDEX", "properties")
-MEILI_KEY = os.getenv("MEILI_MASTER_KEY")
-if not MEILI_KEY:
-    raise ValueError(
-        "MEILI_MASTER_KEY environment variable is required. "
-        "Set MEILI_MASTER_KEY to your Meilisearch master API key."
-    )
+def _meili_key() -> str:
+    """Resolve the Meilisearch key at call time so importing this module
+    doesn't require env vars (the key is env-only, never hardcoded)."""
+    key = os.getenv("MEILI_MASTER_KEY")
+    if not key:
+        raise RuntimeError(
+            "MEILI_MASTER_KEY environment variable is required. "
+            "Set MEILI_MASTER_KEY to your Meilisearch master API key."
+        )
+    return key
 
 
 def _meilisearch_search(q, limit, offset, county_id=None, distress_types=None):
@@ -40,7 +44,7 @@ def _meilisearch_search(q, limit, offset, county_id=None, distress_types=None):
     conn = http.client.HTTPConnection(MEILI_HOST, MEILI_PORT, timeout=15)
     headers = {
         "Content-Type": "application/json",
-        "Authorization": f"Bearer {MEILI_KEY}",
+        "Authorization": f"Bearer {_meili_key()}",
     }
     conn.request("POST", f"/indexes/{MEILI_INDEX}/search", json.dumps(body), headers)
     resp = conn.getresponse()

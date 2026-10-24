@@ -16,7 +16,7 @@ import http.client
 import json
 import os
 
-from sanitize import sanitize_query_param, sanitize_number
+from api.sanitize import sanitize_query_param, sanitize_number
 
 logger = logging.getLogger(__name__)
 
