@@ -25,7 +25,7 @@ from .investor_models import (
     FeedbackAction, DigestLogResponse,
 )
 
-from api.core.matching import match_deals_for_investor
+from .matching import match_deals_for_investor
 from .deal_events import log_event
 from api.sanitize import (
     sanitize_email, sanitize_name, sanitize_url_path,

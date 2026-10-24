@@ -21,11 +21,16 @@ MCP client config (e.g. Claude Desktop / Claude Code):
 import json
 import sys
 from pathlib import Path
-from typing import Optional, Any
+from typing import Any, Dict, Optional
 
 # Allow `from core import ...` whether run as a script (api/ is sys.path[0])
-# or imported as `api.mcp_server` from the repo root.
-sys.path.insert(0, str(Path(__file__).resolve().parent))
+# or imported as `api.mcp_server` from the repo root. The repo ROOT is also
+# put on sys.path for the pro package (pro modules import `api.*` themselves).
+_API_DIR = Path(__file__).resolve().parent
+_REPO_ROOT = _API_DIR.parent
+sys.path.insert(0, str(_API_DIR))
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
 
 from dotenv import load_dotenv
 
@@ -46,6 +51,8 @@ from core import appraisal
 from core import market as market_scoring
 from core import meilisearch_search as ms
 from knowledge_layer import ContextAssembler, RetrievalContract
+from pro import PRO_LICENSE_MESSAGE, require_license
+from pro import matching as pro_matching
 
 mcp = FastMCP(
     "proptoit",
@@ -415,6 +422,137 @@ def list_counties() -> str:
     """List all available counties with property counts."""
     counties = queries.count_counties()
     return json.dumps(counties, indent=2, default=str)
+
+
+# ---------------------------------------------------------------------------
+# Pro tools — license-gated.
+#
+# Registration is unconditional (pro tools stay discoverable); EXECUTION is
+# gated. The license key is read from PROPTOIT_LICENSE_KEY at CALL time, so
+# it can be set or rotated without restarting the server, and verification is
+# fully offline (Ed25519, pro/license.py). Gate on ``info.valid`` — NEVER on
+# truthiness of the KeyInfo itself: it is a dataclass and always truthy.
+# ---------------------------------------------------------------------------
+
+def _pro_license_gate() -> Optional[dict]:
+    """Return a license_required error dict when unlicensed, else None."""
+    info = require_license()
+    if not info.valid:
+        return {
+            "error": "license_required",
+            "message": PRO_LICENSE_MESSAGE,
+            "detail": info.reason,
+        }
+    return None
+
+
+@mcp.tool()
+def score_leads(
+    max_total_investment: float,
+    min_equity_pct: float = 20,
+    target_areas: Optional[list[str]] = None,
+    property_types: Optional[list[str]] = None,
+    max_rehab_cost: Optional[float] = None,
+    preferred_signals: Optional[list[str]] = None,
+    deal_type: str = "both",
+) -> str:
+    """[Pro] Rank distressed properties by match score against investor criteria.
+
+    Args:
+        max_total_investment: Purchase + rehab combined, USD.
+        min_equity_pct: Minimum equity spread percent (default 20).
+        target_areas: Postal codes to match (Hamilton County zips).
+        property_types: One or more of single_family, multi_unit, land.
+        max_rehab_cost: Maximum rehab budget, USD.
+        preferred_signals: Distress signals to prefer (e.g. tax_delinquent).
+        deal_type: flip, hold, or both.
+    """
+    gate = _pro_license_gate()
+    if gate:
+        return json.dumps(gate)
+    profile: Dict[str, Any] = {
+        "deal_type": deal_type,
+        "max_total_investment": max_total_investment,
+        "min_equity_pct": min_equity_pct,
+        "target_areas": target_areas or [],
+        "property_types": property_types or ["single_family"],
+        "max_rehab_cost": max_rehab_cost,
+        "preferred_signals": preferred_signals or [],
+        "county_ids": ["hamilton"],
+    }
+    deals = pro_matching.score_leads(profile)
+    return json.dumps({"count": len(deals), "deals": deals}, indent=2, default=str)
+
+
+@mcp.tool()
+def get_deal_analysis(
+    parcel_id: str,
+    county_id: str = "hamilton",
+) -> str:
+    """[Pro] Full deal analysis for one parcel: equity, distress, scoring components.
+
+    Args:
+        parcel_id: County parcel ID (exact match).
+        county_id: County identifier (default 'hamilton').
+    """
+    gate = _pro_license_gate()
+    if gate:
+        return json.dumps(gate)
+    analysis = queries.get_property_analysis(parcel_id, county_id=county_id)
+    if not analysis:
+        return json.dumps({"error": "not_found", "parcelId": parcel_id})
+    return json.dumps(analysis, indent=2, default=str)
+
+
+@mcp.tool()
+def get_top_deals(
+    limit: int = 25,
+    min_score: int = 50,
+    county_id: str = "hamilton",
+) -> str:
+    """[Pro] Highest deal_score properties — the hottest off-market opportunities.
+
+    Args:
+        limit: Max properties to return (default 25, cap 200).
+        min_score: Minimum deal_score filter (0-100, default 50).
+        county_id: County identifier (default 'hamilton').
+    """
+    gate = _pro_license_gate()
+    if gate:
+        return json.dumps(gate)
+    capped = max(1, min(int(limit), 200))
+    result = queries.get_top_deals(limit=capped, min_score=min_score, county_id=county_id)
+    return json.dumps(result, indent=2, default=str)
+
+
+@mcp.tool()
+def get_arv(
+    parcel_id: str,
+    radius: Optional[float] = None,
+    min_comps: int = 5,
+    county_id: str = "hamilton",
+    rehab_per_sqft: Optional[float] = None,
+) -> str:
+    """[Pro] After-Repair Value (CMV + ARV) via comparable sales analysis.
+
+    Args:
+        parcel_id: County parcel ID (exact match).
+        radius: Search radius in miles (default: adaptive, up to 5).
+        min_comps: Minimum comparable sales needed (default 5).
+        county_id: County identifier (default 'hamilton').
+        rehab_per_sqft: Rehab cost per sqft for the value-add estimate.
+    """
+    gate = _pro_license_gate()
+    if gate:
+        return json.dumps(gate)
+    result = appraisal.full_appraisal(
+        parcel_id,
+        county_id=county_id,
+        radius_miles=radius if radius is not None else 5.0,
+        min_comps=max(1, min(int(min_comps), 50)),
+        rehab_per_sqft=rehab_per_sqft or appraisal.DEFAULT_REHAB_PER_SQFT,
+    )
+    return json.dumps(result, indent=2, default=str)
 
 
 if __name__ == "__main__":

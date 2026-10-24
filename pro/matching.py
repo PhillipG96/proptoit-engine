@@ -1,12 +1,13 @@
 """
-import logging
-
-logger = logging.getLogger(__name__)
-
-Investor Deal Matching Engine
-=============================
+Investor Deal Matching Engine (Pro)
+===================================
 Takes an investor profile and returns ranked deal matches from the
 properties + distress_signals tables.
+
+De facto pro: every query here reads the pro cut tables (users,
+investor_profiles) and its only importer is pro/investor_router.py, so it
+moved from api/core/matching.py to pro/ in Task 2.2. api/ must not reference
+this module.
 
 Scoring phases:
   1. Hard filters (budget, county, target areas)
@@ -16,7 +17,6 @@ Scoring phases:
 """
 from __future__ import annotations
 
-import json
 import math
 import os
 from typing import Any, Dict, List, Optional
@@ -24,10 +24,8 @@ from typing import Any, Dict, List, Optional
 import psycopg2
 import psycopg2.extras
 
-from . import market as market_scoring
-from .queries import row_to_property
-
-DB_DSN = os.getenv("DATABASE_URL")
+from api.core import market as market_scoring
+from api.core.queries import row_to_property
 
 # Tier → max results mapping
 TIER_LIMITS: Dict[str, Optional[int]] = {
@@ -41,8 +39,8 @@ DEFAULT_REHAB_PER_SQFT = 40.0
 
 
 def get_conn() -> psycopg2.extensions.connection:
-    """Return a new psycopg2 connection."""
-    return psycopg2.connect(DB_DSN)
+    """Return a new psycopg2 connection (DSN read at call time, never import time)."""
+    return psycopg2.connect(os.getenv("DATABASE_URL"))
 
 
 # ── Distance helpers (miles) ─────────────────────────────────────
@@ -195,14 +193,93 @@ def _score_property(
     return equity_spread_score + signal_score + rehab_score + type_match_score
 
 
-# ── Main matching function ────────────────────────────────────────
+# ── Matching core ─────────────────────────────────────────────────
+
+def score_leads(
+    profile: Dict[str, Any],
+    *,
+    broaden: bool = False,
+) -> List[dict]:
+    """Score candidate properties against a profile dict; return ranked deals.
+
+    The engine behind both the pro MCP ``score_leads`` tool and
+    ``match_deals_for_investor``. ``profile`` keys (all optional unless
+    noted): ``deal_type``, ``max_total_investment``, ``min_equity_pct``,
+    ``target_areas`` (postal codes), ``property_types``,
+    ``max_rehab_cost``, ``preferred_signals``, ``county_ids``, ``tier``
+    (basic | pro | premium — result-limit tier).
+
+    Args:
+        profile: the criteria dict described above.
+        broaden: if True, skip the target_areas filter (close-calls mode).
+    """
+    conn = get_conn()
+    try:
+        tier = profile.get("tier") or "premium"
+
+        # 1. Query candidates under the hard filters
+        query, params = _build_match_query(
+            county_ids=profile.get("county_ids") or ["hamilton"],
+            max_total_investment=float(profile.get("max_total_investment") or 0),
+            target_areas=profile.get("target_areas") if not broaden else None,
+            property_types=profile.get("property_types"),
+            max_rehab_cost=profile.get("max_rehab_cost"),
+        )
+
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(query, params)
+            candidates = cur.fetchall()
+
+        if not candidates:
+            return []
+
+        # 2. Score and rank
+        scored: List[tuple[float, dict]] = []
+        for c in candidates:
+            cdict = dict(c)
+            score = _score_property(cdict, profile)
+            scored.append((score, cdict))
+
+        scored.sort(key=lambda x: x[0], reverse=True)
+
+        # Filter by deal_score as equity proxy — properties with high
+        # deal_scores have better equity spreads by definition
+        equity_threshold = float(profile.get("min_equity_pct") or 20)
+        filtered = []
+        for score, cdict in scored:
+            deal_score = cdict.get("deal_score") or 0
+            if deal_score >= equity_threshold:
+                filtered.append((score, cdict))
+
+        # Fallback: if nothing passes threshold, return top scorers anyway
+        scored = filtered if filtered else scored
+
+        # 3. Apply tier limit
+        max_results = TIER_LIMITS.get(tier)
+        if max_results is not None:
+            scored = scored[:max_results]
+
+        # 4. Convert to property dicts
+        results = []
+        for score, cdict in scored:
+            prop = row_to_property(cdict)
+            prop["match_score"] = round(score, 2)
+            results.append(prop)
+
+        return results
+
+    finally:
+        conn.close()
+
+
+# ── Investor entry point ──────────────────────────────────────────
 
 def match_deals_for_investor(
     investor_id: str,
     *,
     broaden: bool = False,
 ) -> List[dict]:
-    """Find and rank deals matching an investor's profile.
+    """Find and rank deals matching an investor's stored profile.
 
     Args:
         investor_id: users.id (uuid) of the investor
@@ -240,62 +317,13 @@ def match_deals_for_investor(
             "preferred_signals": row["preferred_signals"] or [],
             "county_ids": row["county_ids"] or ["hamilton"],
         }
-        tier = row["tier"]
+        profile["tier"] = row["tier"]
 
-        # 2. Query candidates
-        query, params = _build_match_query(
-            county_ids=profile["county_ids"],
-            max_total_investment=profile["max_total_investment"],
-            target_areas=profile["target_areas"] if not broaden else None,
-            property_types=profile["property_types"],
-            max_rehab_cost=profile["max_rehab_cost"],
-        )
-
-        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
-            cur.execute(query, params)
-            candidates = cur.fetchall()
-
-        if not candidates and broaden:
-            # Already broadened — return empty
-            return []
-
-        if not candidates and not broaden:
+        # 2. Score through the shared core
+        results = score_leads(profile, broaden=broaden)
+        if not results and not broaden:
             # Close-calls mode: retry without target_areas
             return match_deals_for_investor(investor_id, broaden=True)
-
-        # 3. Score and rank
-        scored: List[tuple[float, dict]] = []
-        for c in candidates:
-            cdict = dict(c)
-            score = _score_property(cdict, profile)
-            scored.append((score, cdict))
-
-        scored.sort(key=lambda x: x[0], reverse=True)
-
-        # Filter by deal_score as equity proxy — properties with high
-        # deal_scores have better equity spreads by definition
-        equity_threshold = profile["min_equity_pct"]
-        filtered = []
-        for score, cdict in scored:
-            deal_score = cdict.get("deal_score") or 0
-            if deal_score >= equity_threshold:
-                filtered.append((score, cdict))
-
-        # Fallback: if nothing passes threshold, return top scorers anyway
-        scored = filtered if filtered else scored
-
-        # 4. Apply tier limit
-        max_results = TIER_LIMITS.get(tier)
-        if max_results is not None:
-            scored = scored[:max_results]
-
-        # 5. Convert to property dicts
-        results = []
-        for score, cdict in scored:
-            prop = row_to_property(cdict)
-            prop["match_score"] = round(score, 2)
-            results.append(prop)
-
         return results
 
     finally:
