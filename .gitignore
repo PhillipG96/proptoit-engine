@@ -5,6 +5,11 @@
 *.pem
 *.key
 
+# License signing keys (Ed25519 private seed, scripts/license_keygen.py) — NEVER commit
+.keys/
+license_ed25519.key
+license_ed25519.key.tmp
+
 # Databases & data files
 *.db
 *.sqlite

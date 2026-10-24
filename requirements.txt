@@ -16,4 +16,5 @@ python-dotenv>=1.0
 pyyaml>=6.0  # CountyConfig adapter YAML loading (proptoit/county_config.py)
 maxminddb>=2.6
 pyjwt>=2.8  # pro/investor_router.py session-JWT auth (pro package dep)
+cryptography>=42  # Ed25519 offline license verify (pro/license.py) — chosen over pynacl: already in the runtime env, one stable raw-sign/verify API
 mcp>=1.4.0,<2  # 2.x renames FastMCP; keep the 1.x API (from mcp.server.fastmcp import FastMCP)
