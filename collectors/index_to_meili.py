@@ -20,19 +20,18 @@ import psycopg2
 import requests
 from dotenv import load_dotenv
 
-load_dotenv(Path(__file__).resolve().parents[2] / ".env")
+load_dotenv(Path(__file__).resolve().parents[1] / ".env")  # repo root
 
-MEILI_URL = "http://localhost:7700"
+MEILI_URL = os.environ.get("MEILI_URL", "http://localhost:7707")
 CHUNK = 5000
 SELECT_SQL = """
     SELECT id, parcel_id, address, city, state, postal_code,
         lot_size_sqft, building_sqft, year_built, bedrooms, bathrooms,
-        last_sale_price, last_sale_date, assessed_value, building_value,
-        land_value, total_value, tax_amount, owner_of_record,
-        owner_mailing_address, owner_occupant, lat, lng,
+        last_sale_price, last_sale_date, assessed_value, tax_amount,
+        owner_of_record, owner_mailing_address, owner_occupant, lat, lng,
         is_vacant, is_tax_delinquent, distress_score, deal_score,
         pre_foreclosure_flag, code_violation_flag, probate_flag, fsbo_flag,
-        vacancy_heuristic, property_category, property_type_code, county_id
+        vacancy_heuristic, property_category, county_id
     FROM properties {where} ORDER BY id
 """
 

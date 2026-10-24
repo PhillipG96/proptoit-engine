@@ -1,7 +1,11 @@
-# PropToIt engine — free core (api/, collectors/, db/)
+# PropToIt engine — api + indexing + sample loader
 # Install in a fresh venv:  python -m venv .venv && .venv/bin/pip install -r requirements.txt
+# Boot the sample stack:    make dev && make index
 # Run the API:              uvicorn api.app:app --port 8000
 # Run the MCP server:       python api/mcp_server.py
+#
+# NOTE: scraper/collector deps (playwright, homeharvest, ...) are intentionally
+# NOT included — they belong to the private deployment, not the OSS core.
 
 fastapi>=0.110
 uvicorn>=0.27

@@ -1,50 +1,53 @@
-# PropToIt Docker Compose - Local Development
-# Plain PostgreSQL (NO PostGIS — unavailable on ARM64). Geospatial data is stored
-# in native lat/lng columns + a `point` geocoords_point; distance math is done in
-# Python (Euclidean), not ST_*. Schema is db/init.sql. This 5432 instance is the
-# single source of truth — see docs/adr/0004-single-database-on-5432.md.
-# Do not introduce a separate host DB.
+# PropToIt — one-command local sample stack (open-source dev).
+#
+# Two services: PostgreSQL 16 + Meilisearch. db/init.sql is plain SQL (pgcrypto,
+# native lat/lng POINT) and deliberately does NOT require PostGIS — the official
+# postgis images are amd64-only, while postgres:16-alpine is multi-arch. On an
+# amd64 host you can opt into PostGIS via POSTGRES_IMAGE=postgis/postgis:16-3.4
+# in .env. `make dev` generates .env (secrets) and loads sample/hamilton_subset.json.
+#
+# Host ports are set by the Makefile (POSTGRES_HOST_PORT=5437, MEILI_HOST_PORT=7707,
+# mirrored here as fallback defaults) so scripts never hardcode them. Override
+# in .env if 5437/7707 are taken.
+#
+# NOTE: do NOT point this stack at production; it is a throwaway sample DB.
 
 services:
-  postgis:
-    image: postgres:16-alpine
-    container_name: proptoit-postgis
+  postgres:
+    image: ${POSTGRES_IMAGE:-postgres:16-alpine}
+    container_name: proptoit-sample-postgres
     restart: unless-stopped
     environment:
       POSTGRES_DB: proptoit
       POSTGRES_USER: proptoit
-      # Set POSTGRES_PASSWORD in .env file (do NOT commit)
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD missing — run 'make dev' to generate .env}
     ports:
-      - "127.0.0.1:5432:5432"
+      - "127.0.0.1:${POSTGRES_HOST_PORT:-5437}:5432"
     volumes:
-      - postgis_data:/var/lib/postgresql/data
-      - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql
+      - pg_data:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U proptoit -d proptoit"]
-      interval: 10s
+      interval: 5s
       timeout: 5s
-      retries: 5
+      retries: 12
 
   meilisearch:
-    image: getmeili/meilisearch:v1.11
-    container_name: proptoit-meilisearch
+    image: ${MEILI_IMAGE:-getmeili/meilisearch:v1.11}
+    container_name: proptoit-sample-meili
     restart: unless-stopped
+    environment:
+      MEILI_MASTER_KEY: ${MEILI_MASTER_KEY:?MEILI_MASTER_KEY missing — run 'make dev' to generate .env}
+      MEILI_NO_ANALYTICS: "true"
     ports:
-      - "127.0.0.1:7700:7700"
+      - "127.0.0.1:${MEILI_HOST_PORT:-7707}:7700"
     volumes:
       - meili_data:/meili_data
-    environment:
-      MEILI_DB_PATH: /meili_data
-      MEILI_MASTER_KEY: ${MEILI_MASTER_KEY}
     healthcheck:
-      test: ["CMD-SHELL", "curl -s http://localhost:7700/health | grep available"]
-      interval: 10s
+      test: ["CMD-SHELL", "curl -sf http://localhost:7700/health | grep -q available"]
+      interval: 5s
       timeout: 5s
-      retries: 5
+      retries: 12
 
 volumes:
-  postgis_data:
-    external: true
-    name: proptoit-mvp_postgis_data
+  pg_data:
   meili_data:
