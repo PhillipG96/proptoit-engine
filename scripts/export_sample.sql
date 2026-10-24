@@ -13,17 +13,35 @@
 -- PII rule (hard): owner_of_record / owner_mailing_address are forced to NULL.
 -- The opt_out_requests registry is checked defensively; opted-out parcels are
 -- never picked. Distress-signal rows are public-record derived and included.
-WITH sig AS (
-    SELECT ds.property_id,
-           json_agg(json_build_object(
-               'signal_type', ds.signal_type::text,
-               'detected_at', ds.detected_at,
-               'source',      ds.source,
-               'severity',    ds.severity,
-               'confidence',  ds.confidence,
-               'metadata',    ds.metadata
-           ) ORDER BY ds.signal_type) AS signals
+-- Sweep of all signal metadata keys (2026-10-24) found exactly two person-name
+-- keys, both on probate rows: 'decedent_name' and 'owner_of_record' (metadata
+-- copy of the owner). Both are stripped below. 'death_date' and 'case_number'
+-- are public court record and stay.
+WITH dsig AS (
+    -- one row per (property_id, signal_type): prod has duplicate signal rows
+    -- (213 raw -> 207 distinct across the 250-parcel subset)
+    SELECT DISTINCT ON (ds.property_id, ds.signal_type)
+           ds.property_id,
+           ds.signal_type::text AS signal_type,
+           ds.detected_at,
+           ds.source,
+           ds.severity,
+           ds.confidence,
+           (ds.metadata - 'decedent_name' - 'owner_of_record') AS metadata
     FROM distress_signals ds
+    ORDER BY ds.property_id, ds.signal_type, ds.detected_at DESC NULLS LAST
+),
+sig AS (
+    SELECT d.property_id,
+           json_agg(json_build_object(
+               'signal_type', d.signal_type,
+               'detected_at', d.detected_at,
+               'source',      d.source,
+               'severity',    d.severity,
+               'confidence',  d.confidence,
+               'metadata',    d.metadata
+           ) ORDER BY d.signal_type) AS signals
+    FROM dsig d
     GROUP BY 1
 ),
 has_signal AS (

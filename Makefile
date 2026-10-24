@@ -42,7 +42,7 @@ dev: venv
 		docker compose exec -T postgres psql -U proptoit -d proptoit -v ON_ERROR_STOP=1 < "$$m"; \
 	done; \
 	echo "==> Loading sample data"; \
-	DATABASE_URL="postgresql://proptoit:$${POSTGRES_PASSWORD}@localhost:$(POSTGRES_HOST_PORT)/proptoit" \
+	DATABASE_URL="postgresql://proptoit:$${POSTGRES_PASSWORD}@localhost:$${POSTGRES_HOST_PORT}/proptoit" \
 		$(PY) scripts/load_sample.py; \
 	echo; echo "Sample stack ready:"; \
 	echo "  postgres:    localhost:$(POSTGRES_HOST_PORT) (db proptoit)"; \
@@ -52,7 +52,7 @@ dev: venv
 # Export .env vars for the python targets without printing them.
 index: venv
 	@set -a; . ./.env; set +a; \
-	DATABASE_URL="postgresql://proptoit:$${POSTGRES_PASSWORD}@localhost:$(POSTGRES_HOST_PORT)/proptoit" \
+	DATABASE_URL="postgresql://proptoit:$${POSTGRES_PASSWORD}@localhost:$${POSTGRES_HOST_PORT}/proptoit" \
 	MEILI_URL="http://localhost:$(MEILI_HOST_PORT)" \
 		$(PY) collectors/index_to_meili.py
 
