@@ -120,30 +120,6 @@ def compare_properties_endpoint(
     return {"success": True, "data": result}
 
 
-@router.get("/top-deals")
-def top_deals(
-    limit: int = Query(default=50, ge=1, le=200),
-    min_score: int = Query(default=50, ge=0, le=100),
-    county_id: Optional[str] = Query(default=None),
-) -> Dict[str, Any]:
-    """Get the highest-scoring properties for deal hunting."""
-    # ── Input sanitization ─────────────────────────────────────────
-    limit = int(sanitize_number(limit, min_val=1, max_val=200, default=50))
-    min_score = int(sanitize_number(min_score, min_val=0, max_val=100, default=50))
-    county_id = validate_county_id(county_id)
-    try:
-        result = queries.get_top_deals(limit=limit, min_score=min_score, county_id=county_id)
-    except Exception:
-        logger.error("Top deals error", exc_info=True)
-        raise HTTPException(status_code=500, detail="Internal server error")
-
-    return {
-        "success": True,
-        "data": result["data"],
-        "pagination": {"total": result["total"], "limit": limit, "offset": 0},
-    }
-
-
 @router.get("/export/csv")
 def export_csv(
     limit: int = Query(default=1000, ge=1, le=5000),

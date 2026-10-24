@@ -10,4 +10,5 @@ psycopg2-binary>=2.9
 requests>=2.31
 python-dotenv>=1.0
 maxminddb>=2.6
+pyjwt>=2.8  # pro/investor_router.py session-JWT auth (pro package dep)
 mcp>=1.4.0,<2  # 2.x renames FastMCP; keep the 1.x API (from mcp.server.fastmcp import FastMCP)

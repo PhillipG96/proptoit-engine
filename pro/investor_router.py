@@ -19,7 +19,6 @@ from fastapi.responses import Response
 from pydantic import BaseModel
 from typing import Any, Dict, List, Optional, Tuple
 
-import jwt as pyjwt
 from .investor_models import (
     InvestorCreate, InvestorProfileCreate, InvestorProfileUpdate,
     InvestorResponse, InvestorProfileResponse,

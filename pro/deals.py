@@ -25,12 +25,17 @@ router = APIRouter()
 MEILI_HOST = os.getenv("MEILI_HOST", "localhost")
 MEILI_PORT = int(os.getenv("MEILI_PORT", "7700"))
 MEILI_INDEX = os.getenv("MEILI_INDEX", "properties")
-MEILI_KEY = os.getenv("MEILI_MASTER_KEY")
-if not MEILI_KEY:
-    raise ValueError(
-        "MEILI_MASTER_KEY environment variable is required. "
-        "Set MEILI_MASTER_KEY to your Meilisearch master API key."
-    )
+
+
+def _meili_key() -> str:
+    """Raise loudly at call time if the key is missing (still env-only)."""
+    key = os.getenv("MEILI_MASTER_KEY")
+    if not key:
+        raise ValueError(
+            "MEILI_MASTER_KEY environment variable is required. "
+            "Set MEILI_MASTER_KEY to your Meilisearch master API key."
+        )
+    return key
 
 SIGNAL_LABELS = {
     "tax_delinquent": "Tax delinquent (Hamilton County Trustee file)",
@@ -61,7 +66,7 @@ def _meili_search(body: dict) -> dict:
     conn = http.client.HTTPConnection(MEILI_HOST, MEILI_PORT, timeout=10)
     conn.request("POST", f"/indexes/{MEILI_INDEX}/search", json.dumps(body),
                  headers={"Content-Type": "application/json",
-                          "Authorization": f"Bearer {MEILI_KEY}"})
+                          "Authorization": f"Bearer {_meili_key()}"})
     data = json.loads(conn.getresponse().read().decode())
     conn.close()
     return data
