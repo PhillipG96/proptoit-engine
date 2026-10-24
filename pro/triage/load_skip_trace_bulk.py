@@ -30,7 +30,9 @@ import psycopg2.extras
 
 CSV_URL = "https://www.hamiltontn.gov/_downloadsAssessor/AssessorExportCSV.zip"
 LAYOUT_URL = "https://www.hamiltontn.gov/_downloadsAssessor/AssessorExtractLayout.pdf"
-DB_DSN = "host=localhost port=5433 dbname=proptoit user=postgres"
+# DSN is resolved at CALL time in run() — never hardcoded to a prod port:
+#   explicit `dsn` arg > env DATABASE_URL > local sample stack (5437).
+DEFAULT_DSN = "postgresql://proptoit@localhost:5437/proptoit"
 
 log = logging.getLogger(__name__)
 
@@ -238,18 +240,22 @@ def load_csv_addresses(csv_path: str) -> list[dict]:
     return records
 
 
-def run(csv_path: str, dry_run: bool, limit: int = 0) -> dict:
-    """Load CSV data into skip_trace_results and update properties."""
-    
+def run(csv_path: str, dry_run: bool, limit: int = 0, dsn: str | None = None) -> dict:
+    """Load CSV data into skip_trace_results and update properties.
+
+    ``dsn``: explicit target DSN; falls back to env DATABASE_URL, then the
+    local sample stack. Never defaults to production (5433).
+    """
+
     log.info("Loading CSV: %s", csv_path)
     records = load_csv_addresses(csv_path)
     log.info("Parsed %d records with mailing data", len(records))
-    
+
     if limit:
         records = records[:limit]
         log.info("Limiting to %d records", limit)
-    
-    conn = psycopg2.connect(DB_DSN)
+
+    conn = psycopg2.connect(dsn or os.environ.get("DATABASE_URL") or DEFAULT_DSN)
     
     try:
         # Step 1: Build address → property_id lookup

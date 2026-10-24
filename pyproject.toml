@@ -1,0 +1,38 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "proptoit"
+version = "0.1.0"
+description = "PropToIt engine — Chattanooga off-market property intelligence (OSS core: sample stack, MCP server, license-gated pro tools)"
+requires-python = ">=3.10"
+license = {text = "Proprietary"}  # OSS core of a commercial product; Phase 3 finalizes licensing
+
+# Mirror of requirements.txt (kept in sync by hand — requirements.txt stays the
+# canonical env list for `make venv`; this list is what `pip install proptoit`
+# needs so the CLI, MCP server and indexer all work). Scraper/collector deps
+# (playwright, homeharvest, ...) are intentionally NOT included — they belong
+# to the private deployment, not the OSS core.
+dependencies = [
+    "fastapi>=0.110",
+    "uvicorn>=0.27",
+    "pydantic>=2.5",
+    "psycopg2-binary>=2.9",
+    "requests>=2.31",
+    "python-dotenv>=1.0",
+    "pyyaml>=6.0",
+    "maxminddb>=2.6",
+    "pyjwt>=2.8",
+    "cryptography>=42",
+    "mcp>=1.4.0,<2",  # 2.x renames FastMCP; keep the 1.x API
+]
+
+[project.scripts]
+proptoit = "proptoit.cli:main"
+
+[tool.setuptools]
+# pro/ ships (gated at runtime by pro/license.py) so `from pro import
+# require_license` works in the installed CLI; api/ and collectors/ are driven
+# in place from the repo root (see _repo_root).
+packages = ["proptoit", "proptoit.adapters", "pro", "pro.triage"]
