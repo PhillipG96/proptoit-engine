@@ -34,7 +34,7 @@ if str(_REPO_ROOT) not in sys.path:
 
 from dotenv import load_dotenv
 
-# core.meilisearch_search needs the Meilisearch auth key at import time; when run
+# core.meilisearch_search resolves the Meilisearch auth key at call time; when run
 # under an MCP client that passes a minimal env, pull it from the project .env.
 load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 

@@ -931,7 +931,7 @@ def search_properties_by_category(
         max_assessed_value=max_assessed_value,
         distress_types=distress_types,
         county_id=county_id,
-        use_county_alias=True,
+        use_county_alias=False,
     )
 
     base_query = f"""
@@ -944,7 +944,7 @@ def search_properties_by_category(
             FROM distress_signals
             GROUP BY property_id
         )
-        SELECT p.id, p.parcel_id, p.county, p.address, p.city, p.state, p.postal_code,
+        SELECT p.id, p.parcel_id, p.county_id, p.address, p.city, p.state, p.postal_code,
                p.lot_size_sqft, p.building_sqft, p.year_built,
                p.bedrooms, p.bathrooms, p.last_sale_price, p.last_sale_date,
                p.assessed_value, p.tax_amount, p.owner_of_record,
@@ -969,8 +969,8 @@ def search_properties_by_category(
                     0,
                     0
                ) AS distress_score,
-               ST_X(p.geocoords_point) AS lat,
-               ST_Y(p.geocoords_point) AS lng
+               (p.geocoords_point)[0] AS lat,
+               (p.geocoords_point)[1] AS lng
         FROM {view_name} p
         LEFT JOIN distress_agg d ON p.id = d.property_id
         {where_sql}

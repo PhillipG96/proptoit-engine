@@ -42,6 +42,36 @@ CREATE INDEX IF NOT EXISTS idx_agent_memory_parcel ON agent_memory(parcel_id, is
 """
 
 
+_ensure_once_done = False
+
+
+def _ensure_table_once() -> None:
+    """Create the agent_memory table exactly once, on the first static call.
+
+    AgentMemory is used entirely through staticmethods, so nothing ever
+    instantiates it and the __init__-driven _ensure_table() was dead code —
+    the table never existed and save/list raised
+    `relation "agent_memory" does not exist`.
+
+    The guard runs at CALL time (never at import time), resolves the DSN
+    from the environment at call time like the rest of the repo, and fails
+    loudly (raises) instead of swallowing the error. The flag is only set
+    after a successful CREATE, so a failed attempt is retried on the next
+    call.
+    """
+    global _ensure_once_done
+    if _ensure_once_done:
+        return
+    conn = AgentMemory._get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(CREATE_TABLE)
+        conn.commit()
+    finally:
+        conn.close()
+    _ensure_once_done = True
+
+
 class AgentMemory:
     """Postgres-backed memory layer with confidence labeling."""
 
@@ -69,6 +99,7 @@ class AgentMemory:
     @staticmethod
     def list_for_parcel(parcel_id: str) -> list[dict]:
         """Return active memories for a property, sorted by confidence priority."""
+        _ensure_table_once()
         conn = AgentMemory._get_conn()
         try:
             with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
@@ -105,6 +136,7 @@ class AgentMemory:
     @staticmethod
     def save(parcel_id: str, content: str, confidence: str = "inferred") -> int:
         """Save an observation. Returns the new row ID."""
+        _ensure_table_once()
         if confidence not in VALID_CONFIDENCE_LEVELS:
             logger.warning(f"Invalid confidence level '{confidence}', defaulting to 'inferred'")
             confidence = "inferred"
@@ -127,6 +159,7 @@ class AgentMemory:
     @staticmethod
     def update_confidence(memory_id: int, confidence: str) -> bool:
         """Update the confidence label of a memory entry."""
+        _ensure_table_once()
         if confidence not in VALID_CONFIDENCE_LEVELS:
             return False
 
@@ -146,6 +179,7 @@ class AgentMemory:
     @staticmethod
     def mark_stale(memory_id: int) -> bool:
         """Deactivate a memory entry (soft delete)."""
+        _ensure_table_once()
         conn = AgentMemory._get_conn()
         try:
             with conn.cursor() as cur:

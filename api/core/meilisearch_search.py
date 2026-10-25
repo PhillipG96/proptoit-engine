@@ -15,7 +15,7 @@ from sanitize import sanitize_query_param, sanitize_number
 router = APIRouter()
 
 MEILI_HOST = os.getenv("MEILI_HOST", "localhost")
-MEILI_PORT = int(os.getenv("MEILI_PORT", "7700"))
+MEILI_PORT = int(os.getenv("MEILI_PORT", "7707"))
 MEILI_INDEX = os.getenv("MEILI_INDEX", "properties")
 def _meili_key() -> str:
     """Resolve the Meilisearch key at call time so importing this module

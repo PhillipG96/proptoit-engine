@@ -176,8 +176,8 @@ INSERT_SIGNAL = """
 """
 
 INSERT_FSBO_LISTING = """
-    INSERT INTO fsbo_listings (source, source_url, price, title, latitude, longitude, scraped_at, county_id)
-    VALUES (%(source)s, %(source_url)s, %(price)s, %(title)s, %(latitude)s, %(longitude)s, NOW(), 'hamilton')
+    INSERT INTO fsbo_listings (source, listing_url, listing_price, description, scraped_at, county_id)
+    VALUES (%(source)s, %(listing_url)s, %(listing_price)s, %(description)s, NOW(), 'hamilton')
     RETURNING id
 """
 
@@ -214,11 +214,9 @@ def upsert_fsbo_listings(conn, listings, dry_run=False):
 
                 row = {
                     "source": "craigslist",
-                    "source_url": listing.get("source_url", CL_URL),
-                    "price": price,
-                    "title": listing.get("title", ""),
-                    "latitude": listing.get("lat"),
-                    "longitude": listing.get("lng"),
+                    "listing_url": listing.get("source_url", CL_URL),
+                    "listing_price": price,
+                    "description": listing.get("title", ""),
                 }
                 cur.execute(INSERT_FSBO_LISTING, row)
                 count += 1

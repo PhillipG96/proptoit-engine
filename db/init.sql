@@ -241,3 +241,28 @@ CREATE TABLE IF NOT EXISTS quarterly_price_index (
     updated_at  TIMESTAMP DEFAULT NOW(),
     PRIMARY KEY (county_id, quarter)
 );
+
+-- ============================================================================
+-- FSBO listings — For-Sale-By-Owner listings scraped from Craigslist
+-- Chattanooga. Written by collectors/hamilton/fsbo/fsbo_craigslist.py
+-- (DELETE+INSERT per run), read by api/core/queries.py list_fsbo_listings()
+-- and the knowledge-layer assembler. property_id is a nullable best-effort
+-- match to properties; listing content only — no owner PII (PII rule).
+-- ============================================================================
+CREATE TABLE IF NOT EXISTS fsbo_listings (
+    id              SERIAL PRIMARY KEY,
+    property_id     INTEGER REFERENCES properties(id) ON DELETE SET NULL,
+    county_id       TEXT NOT NULL DEFAULT 'hamilton',
+    source          TEXT NOT NULL,
+    listing_url     TEXT,
+    listing_price   NUMERIC,
+    description     TEXT,
+    status          TEXT,
+    days_on_market  INTEGER,
+    listed_at       TIMESTAMP,
+    scraped_at      TIMESTAMP DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_fsbo_listings_county ON fsbo_listings(county_id);
+CREATE INDEX IF NOT EXISTS idx_fsbo_listings_property ON fsbo_listings(property_id);
+CREATE INDEX IF NOT EXISTS idx_fsbo_listings_scraped ON fsbo_listings(scraped_at);
