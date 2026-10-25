@@ -78,3 +78,7 @@ is PII-safe by construction; see [sample/README.md](sample/README.md).
 Source of truth for the tool split: [`api/mcp_server.py`](api/mcp_server.py)
 (free tools) and the `_pro_license_gate` wiring (Pro tools). License contract:
 [`pro/license.py`](pro/license.py).
+
+## License
+
+MIT — see [LICENSE](LICENSE). The four Pro tools are gated by a one-time license key at runtime; the code itself is MIT.
