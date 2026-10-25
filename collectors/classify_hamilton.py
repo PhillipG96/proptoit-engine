@@ -77,7 +77,7 @@ def classify_by_use_code(cur, conn):
         UPDATE properties
         SET property_category = {case_expr}, updated_at = NOW()
         WHERE county_id = 'hamilton'
-          AND property_category = 'unknown'
+          AND property_category IS NULL
           AND current_use IN ({placeholders})
     """)
     updated = cur.rowcount
@@ -104,7 +104,7 @@ def classify_by_heuristics(cur, conn):
         UPDATE properties
         SET property_category = 'residential', updated_at = NOW()
         WHERE county_id = 'hamilton'
-          AND property_category = 'unknown'
+          AND property_category IS NULL
           AND (
             address ILIKE '% ST' OR address ILIKE '% STREET'
             OR address ILIKE '% AVE' OR address ILIKE '% AVENUE'
@@ -127,7 +127,7 @@ def classify_by_heuristics(cur, conn):
         UPDATE properties
         SET property_category = 'residential', updated_at = NOW()
         WHERE county_id = 'hamilton'
-          AND property_category = 'unknown'
+          AND property_category IS NULL
           AND building_sqft IS NOT NULL
           AND building_sqft > 0
           AND building_sqft < 3000
@@ -142,7 +142,7 @@ def classify_by_heuristics(cur, conn):
         UPDATE properties
         SET property_category = 'residential', updated_at = NOW()
         WHERE county_id = 'hamilton'
-          AND property_category = 'unknown'
+          AND property_category IS NULL
           AND building_sqft IS NOT NULL
           AND building_sqft > 0
           AND building_sqft < 3000
@@ -158,7 +158,7 @@ def classify_by_heuristics(cur, conn):
         UPDATE properties
         SET property_category = 'commercial', updated_at = NOW()
         WHERE county_id = 'hamilton'
-          AND property_category = 'unknown'
+          AND property_category IS NULL
           AND (
               (building_sqft IS NOT NULL AND building_sqft >= 3000)
               OR (assessed_value IS NOT NULL AND assessed_value >= 500000)
@@ -173,7 +173,7 @@ def classify_by_heuristics(cur, conn):
         UPDATE properties
         SET property_category = 'residential', updated_at = NOW()
         WHERE county_id = 'hamilton'
-          AND property_category = 'unknown'
+          AND property_category IS NULL
           AND building_sqft = 0
           AND assessed_value IS NOT NULL
           AND assessed_value < 100000
@@ -186,7 +186,7 @@ def classify_by_heuristics(cur, conn):
         UPDATE properties
         SET property_category = 'commercial', updated_at = NOW()
         WHERE county_id = 'hamilton'
-          AND property_category = 'unknown'
+          AND property_category IS NULL
           AND building_sqft = 0
           AND assessed_value IS NOT NULL
           AND assessed_value >= 100000
@@ -199,7 +199,7 @@ def classify_by_heuristics(cur, conn):
         UPDATE properties
         SET property_category = 'commercial', updated_at = NOW()
         WHERE county_id = 'hamilton'
-          AND property_category = 'unknown'
+          AND property_category IS NULL
           AND (
             address ILIKE '% SUITE%'
             OR address ILIKE '% STE %'
@@ -217,7 +217,7 @@ def classify_by_heuristics(cur, conn):
         UPDATE properties
         SET property_category = 'commercial', updated_at = NOW()
         WHERE county_id = 'hamilton'
-          AND property_category = 'unknown'
+          AND property_category IS NULL
           AND (
             address ILIKE '% HWY%'
             OR address ILIKE '% HIGHWAY%'
@@ -236,7 +236,7 @@ def classify_by_heuristics(cur, conn):
         UPDATE properties
         SET property_category = 'residential', updated_at = NOW()
         WHERE county_id = 'hamilton'
-          AND property_category = 'unknown'
+          AND property_category IS NULL
           AND building_sqft IS NOT NULL
           AND building_sqft > 0
           AND building_sqft < 500
@@ -251,7 +251,7 @@ def classify_by_heuristics(cur, conn):
         UPDATE properties
         SET property_category = 'residential', updated_at = NOW()
         WHERE county_id = 'hamilton'
-          AND property_category = 'unknown'
+          AND property_category IS NULL
           AND building_sqft IS NOT NULL
           AND building_sqft > 0
           AND building_sqft < 2000
@@ -264,7 +264,7 @@ def classify_by_heuristics(cur, conn):
         UPDATE properties
         SET property_category = 'residential', updated_at = NOW()
         WHERE county_id = 'hamilton'
-          AND property_category = 'unknown'
+          AND property_category IS NULL
     """)
     counts['r11_fallback'] = cur.rowcount
     conn.commit()
@@ -321,7 +321,7 @@ def main():
     print("\n--- Before ---")
     cur.execute("SELECT COUNT(*) FROM properties WHERE county_id='hamilton'")
     total = cur.fetchone()[0]
-    cur.execute("SELECT COUNT(*) FROM properties WHERE county_id='hamilton' AND property_category='unknown'")
+    cur.execute("SELECT COUNT(*) FROM properties WHERE county_id='hamilton' AND property_category IS NULL")
     unknown = cur.fetchone()[0]
     print(f"Total: {total:,}  Unknown: {unknown:,} ({unknown*100.0/total:.1f}%)")
 
@@ -344,7 +344,7 @@ def main():
 
     # Post-classification stats
     print("\n--- After ---")
-    cur.execute("SELECT COUNT(*) FROM properties WHERE county_id='hamilton' AND property_category='unknown'")
+    cur.execute("SELECT COUNT(*) FROM properties WHERE county_id='hamilton' AND property_category IS NULL")
     remaining = cur.fetchone()[0]
     print(f"Remaining unknown: {remaining:,} ({remaining*100.0/total:.1f}%)")
 

@@ -3,8 +3,9 @@
 **Self-hosted deal analysis engine for real-estate investors — bring your data, plug in your AI.**
 
 PropToIt runs on your machine, indexes public-records property data, and exposes it to
-your AI assistant over [MCP](https://modelcontextprotocol.io) — 20 read-only tools,
-no cloud, no phone-home. Pro features (deal scoring, ARV, bulk triage) unlock with a
+your AI assistant over [MCP](https://modelcontextprotocol.io) — 20 tools (19 read-only
+plus `save_agent_memory`, which writes agent notes to your local database). No cloud,
+no phone-home. Pro features (deal scoring, ARV, bulk triage) unlock with a
 one-time license; the free tier needs no key.
 
 ## Quickstart (10 minutes)
@@ -12,7 +13,7 @@ one-time license; the free tier needs no key.
 Requires Docker and Python 3.10+.
 
 ```bash
-git clone https://github.com/proptoit/proptoit-engine
+git clone https://github.com/PhillipG96/proptoit-engine
 cd proptoit-engine
 pip install -e .        # installs the proptoit CLI + MCP server (from the repo root)
 proptoit init           # writes .env with fresh random secrets (never overwrites an existing one)
@@ -43,7 +44,8 @@ A real recorded session (unkeyed denial → offline license → scored leads) is
 
 ## Free vs Pro
 
-All 20 MCP tools are read-only. Free tools work with no license; the four Pro
+19 of the 20 MCP tools are read-only — the exception is `save_agent_memory`,
+which writes agent notes to your local database. Free tools work with no license; the four Pro
 tools stay discoverable but return a `license_required` error until
 `PROPTOIT_LICENSE_KEY` is set (verification is fully offline, Ed25519 —
 no network calls, ever).

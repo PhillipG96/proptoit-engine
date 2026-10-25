@@ -127,10 +127,11 @@ def find_owner_matches(conn, debtor_name):
     tokens = [t for t in tokens if t not in ("JR", "SR", "III", "II", "TR", "TRS", "TRUSTEE", "&")]
     if len(tokens) < 2:
         return []
-    # all tokens must appear in the owner string
-    conds = " AND ".join(
-        f"upper(p.owner_of_record) LIKE '%' || upper(%({t})s) || '%'" for t in tokens)
-    params = {t: t for t in tokens}
+    # All tokens must appear in the owner string. Values pass through %s
+    # placeholders (tokens come from external legal notices and must never
+    # become part of the SQL text); the wildcards live in the bound values.
+    conds = " AND ".join(["upper(p.owner_of_record) LIKE %s"] * len(tokens))
+    params = [f"%{t}%" for t in tokens]
     with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
         cur.execute(f"""
             SELECT p.id, p.parcel_id, p.address, p.owner_of_record

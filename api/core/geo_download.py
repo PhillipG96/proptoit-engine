@@ -9,7 +9,7 @@ from pathlib import Path
 logger = logging.getLogger(__name__)
 
 DB_URL = "https://download.maxmind.com/app/geoip_download?edition_id=GeoLite2-Country&license_key={}&suffix=tar.gz"
-DB_DIR = Path("/home/magicofelipe/proptoit/data/geo")
+DB_DIR = Path(os.getenv("GEOLITE_DB_DIR", str(Path(__file__).resolve().parents[2] / "data" / "geo")))
 VALIDATE_URL = "https://secret-scanning.maxmind.com/secrets/validate-license-key"
 
 
@@ -55,7 +55,7 @@ def download(maxmind_key: str | None = None) -> str:
                 if f:
                     with open(extract_path, "wb") as out:
                         out.write(f.read())
-                    logger.info(f"Extracted to {extract_path} ({extract_path.stat().st_size} bytes)")
+                    logger.info(f"Extracted to {extract_path} ({extract_path.stat().st_size} bytes) — set GEOLITE_DB to this path")
                     return str(extract_path)
     return ""
 

@@ -7,7 +7,7 @@ name = "proptoit"
 version = "0.1.0"
 description = "PropToIt engine — Chattanooga off-market property intelligence (OSS core: sample stack, MCP server, license-gated pro tools)"
 requires-python = ">=3.10"
-license = {text = "Proprietary"}  # OSS core of a commercial product; Phase 3 finalizes licensing
+license = {text = "MIT"}
 
 # Mirror of requirements.txt (kept in sync by hand — requirements.txt stays the
 # canonical env list for `make venv`; this list is what `pip install proptoit`

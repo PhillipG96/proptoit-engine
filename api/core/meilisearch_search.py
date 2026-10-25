@@ -1,11 +1,7 @@
 """
-import logging
-
-logger = logging.getLogger(__name__)
-
 Meilisearch-powered full-text search endpoint.
 """
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, HTTPException, Query
 from typing import Optional, Dict, Any, List
 import http.client
 import json
@@ -50,10 +46,15 @@ def meilisearch_search(
         "Content-Type": "application/json",
         "Authorization": f"Bearer {_meili_key()}",
     }
-    conn.request("POST", f"/indexes/{MEILI_INDEX}/search", body, headers)
-    resp = conn.getresponse()
-    data = json.loads(resp.read().decode())
-    conn.close()
+    try:
+        conn.request("POST", f"/indexes/{MEILI_INDEX}/search", body, headers)
+        resp = conn.getresponse()
+        raw = resp.read()
+        if resp.status != 200:
+            raise HTTPException(502, f"Meilisearch search failed (HTTP {resp.status})")
+        data = json.loads(raw.decode())
+    finally:
+        conn.close()
 
     hits = data.get("hits", [])
     return {

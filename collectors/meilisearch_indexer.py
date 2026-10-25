@@ -12,12 +12,12 @@ import tempfile
 import os
 import json
 
-MEILISEARCH_URL = "http://localhost:7700"
+MEILISEARCH_URL = os.environ.get("MEILISEARCH_URL", "http://localhost:7707")
 MEILISEARCH_KEY = os.environ.get("MEILISEARCH_ADMIN_KEY")
 if not MEILISEARCH_KEY:
     raise RuntimeError("MEILISEARCH_ADMIN_KEY environment variable is required")
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "")
-TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "8606012827")
+TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "")
 
 log = logging.getLogger(__name__)
 
@@ -107,7 +107,7 @@ def main():
     
     # Telegram notification
     message = f"{'✅ Meilisearch indexed {total} properties' if not error else f'❌ Indexer error: {error}'}"
-    if TELEGRAM_BOT_TOKEN:
+    if TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID:
         try:
             requests.post(
                 f'https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage',

@@ -35,8 +35,14 @@ _optout_lock = _Lock()
 
 
 def _optout_rate_limit(request: _Request) -> None:
-    ip = request.headers.get("cf-connecting-ip") or (
-        request.client.host if request.client else "unknown")
+    # Prefer the peer address; a direct client controls cf-connecting-ip and
+    # could spoof it to evade the limit. Only trust the header when the peer
+    # is itself a local proxy (Cloudflare Tunnel / reverse proxy on loopback).
+    peer = request.client.host if request.client else None
+    cf_ip = request.headers.get("cf-connecting-ip")
+    ip = peer or "unknown"
+    if peer in ("127.0.0.1", "::1") and cf_ip:
+        ip = cf_ip
     now = _time.time()
     with _optout_lock:
         hits = [t for t in _optout_hits[ip] if t > now - _OPTOUT_WINDOW]

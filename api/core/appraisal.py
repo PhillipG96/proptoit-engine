@@ -25,21 +25,31 @@ from typing import Any, Optional, Dict, List
 
 import psycopg2
 import psycopg2.extras
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 
+from core.gate import require_pro_license
 from sanitize import sanitize_number, sanitize_url_path, validate_county_id
 from cache import cache, cached
 
 router = APIRouter()
 
-DB_DSN = os.getenv("DATABASE_URL")
-
 # Default rehab assumption for value-add (tunable). Moderate cosmetic + systems refresh.
 DEFAULT_REHAB_PER_SQFT = 40.0
 
 
+def _db_dsn() -> str:
+    """Resolve DATABASE_URL at call time — loud error if unset (no default DSN)."""
+    dsn = os.getenv("DATABASE_URL")
+    if not dsn:
+        raise RuntimeError(
+            "DATABASE_URL is not set — the appraisal engine requires an explicit "
+            "DSN (export it, e.g. from the repo .env; no default is shipped)."
+        )
+    return dsn
+
+
 def get_conn() -> psycopg2.extensions.connection:
-    return psycopg2.connect(DB_DSN)
+    return psycopg2.connect(_db_dsn())
 
 
 # ── Haversine distance (miles) ──
@@ -317,10 +327,14 @@ def calculate_cmv(
     
     comps = result["comps"]
 
-    # If too few comps, try expanding radius
+    # If too few comps, try expanding radius. @cached returns the SHARED
+    # object here too, so take a private copy before mutating (same reason
+    # as the deepcopy above).
     if len(comps) < min_comps:
         for expanded_radius in [8.0, 10.0]:
-            result = find_comps(parcel_id, county_id=county_id, radius_miles=expanded_radius, min_comps=min_comps)
+            result = copy.deepcopy(
+                find_comps(parcel_id, county_id=county_id, radius_miles=expanded_radius, min_comps=min_comps)
+            )
             comps = result["comps"]
             if len(comps) >= min_comps:
                 result["radius_miles"] = expanded_radius
@@ -484,7 +498,7 @@ def full_appraisal(
 
 
 # ── FastAPI Endpoints ──
-@router.get("/{parcel_id}")
+@router.get("/{parcel_id}", dependencies=[Depends(require_pro_license)])
 def get_appraisal(
     parcel_id: str,
     radius: Optional[float] = None,
@@ -497,15 +511,6 @@ def get_appraisal(
     radius_val = sanitize_number(radius, min_val=0.0, max_val=25.0, default=5.0)
     rehab_val = sanitize_number(rehab_per_sqft, min_val=0.0, max_val=300.0, default=DEFAULT_REHAB_PER_SQFT)
     parcel_id = sanitize_url_path(parcel_id)
-    """
-    Get property appraisal (CMV + ARV) using comparable sales.
-    
-    Args:
-      parcel_id: Hamilton County parcel ID
-      radius: Search radius in miles (default: adaptive, up to 5)
-      min_comps: Minimum comparable sales needed (default: 5)
-      county_id: County identifier (default 'hamilton').
-    """
     result = full_appraisal(
         parcel_id,
         county_id=county_id,

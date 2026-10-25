@@ -1,12 +1,8 @@
 """
-import logging
-
-logger = logging.getLogger(__name__)
-
 Search endpoint — Meilisearch full-text + PostgreSQL filter routing.
 Supports free-text query (q) via Meilisearch, and filter-based search via PostgreSQL.
 """
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, HTTPException, Query
 from typing import Optional, List, Dict, Any
 import http.client
 import json
@@ -34,8 +30,13 @@ def _meili_key() -> str:
     return key
 
 
-def _meilisearch_search(q, limit, offset, county_id=None, distress_types=None):
-    """Search via Meilisearch with optional county/distress filters."""
+def _meilisearch_search(q, limit, offset, county_id=None):
+    """Search via Meilisearch with an optional county filter.
+
+    Note: distress_types filtering only applies on the PostgreSQL
+    (filter-based) path — the Meilisearch index carries no per-signal
+    filterable fields, so free-text search cannot honor it.
+    """
     body = {"q": q, "limit": limit, "offset": offset, "showRankingScore": True}
     if county_id:
         # county_id is an alphabetic slug (e.g. "hamilton"); quote it for Meili filter syntax
@@ -46,10 +47,15 @@ def _meilisearch_search(q, limit, offset, county_id=None, distress_types=None):
         "Content-Type": "application/json",
         "Authorization": f"Bearer {_meili_key()}",
     }
-    conn.request("POST", f"/indexes/{MEILI_INDEX}/search", json.dumps(body), headers)
-    resp = conn.getresponse()
-    data = json.loads(resp.read().decode())
-    conn.close()
+    try:
+        conn.request("POST", f"/indexes/{MEILI_INDEX}/search", json.dumps(body), headers)
+        resp = conn.getresponse()
+        raw = resp.read()
+        if resp.status != 200:
+            raise HTTPException(502, f"Meilisearch search failed (HTTP {resp.status})")
+        data = json.loads(raw.decode())
+    finally:
+        conn.close()
     hits = data.get("hits", [])
     # Strip ranking score from output but include total
     clean_hits = []
@@ -82,7 +88,11 @@ def search_properties_endpoint(
     signal_type: Optional[str] = Query(default=None, alias="signalType"),
     county_id: Optional[str] = Query(default=None, description="County slug (e.g. hamilton, harris). None = all counties."),
 ) -> Dict[str, Any]:
-    """Search properties: free-text via Meilisearch, or filter-based via PostgreSQL."""
+    """Search properties: free-text via Meilisearch, or filter-based via PostgreSQL.
+
+    distress_types (and signal_type) only apply to the filter-based PostgreSQL
+    path; free-text search cannot honor them.
+    """
     # ── Input sanitization ─────────────────────────────────────────
     # Sanitize free-text query — strip HTML, truncate, remove null bytes
     q_clean = sanitize_query_param(q, max_length=255) if q else ""
@@ -106,8 +116,10 @@ def search_properties_endpoint(
         sort_by = "distressScore"
     if sort_dir not in ("asc", "desc"):
         sort_dir = "desc"
-    # Validate county_id
-    if not county_id or not re.match(r'^[a-z0-9_]+$', county_id):
+    # Validate county_id — invalid slugs fall back to the default; None/empty
+    # searches all counties (meili path sends no filter; the SQL path skips
+    # the county condition).
+    if county_id and not re.match(r'^[a-z0-9_]+$', county_id):
         county_id = "hamilton"
 
     # Normalize signal_type
@@ -118,7 +130,7 @@ def search_properties_endpoint(
 
     # Free-text query → Meilisearch
     if q_clean:
-        return _meilisearch_search(q_clean, limit, offset, county_id, distress_clean)
+        return _meilisearch_search(q_clean, limit, offset, county_id)
 
     # Filter-only → PostgreSQL
     return search_properties(

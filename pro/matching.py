@@ -207,7 +207,10 @@ def score_leads(
     noted): ``deal_type``, ``max_total_investment``, ``min_equity_pct``,
     ``target_areas`` (postal codes), ``property_types``,
     ``max_rehab_cost``, ``preferred_signals``, ``county_ids``, ``tier``
-    (basic | pro | premium — result-limit tier).
+    (basic | pro | premium — result-limit tier). ``min_equity_pct`` is
+    accepted for API compatibility but not yet applied — no equity data is
+    populated, so there is nothing to filter on (see the note in
+    ``match_deals_for_investor``).
 
     Args:
         profile: the criteria dict described above.
@@ -242,17 +245,10 @@ def score_leads(
 
         scored.sort(key=lambda x: x[0], reverse=True)
 
-        # Filter by deal_score as equity proxy — properties with high
-        # deal_scores have better equity spreads by definition
-        equity_threshold = float(profile.get("min_equity_pct") or 20)
-        filtered = []
-        for score, cdict in scored:
-            deal_score = cdict.get("deal_score") or 0
-            if deal_score >= equity_threshold:
-                filtered.append((score, cdict))
-
-        # Fallback: if nothing passes threshold, return top scorers anyway
-        scored = filtered if filtered else scored
+        # NOTE: min_equity_pct is accepted for API compatibility but not yet
+        # applied — deal_score is a 0-100 composite (and currently
+        # unpopulated), not an equity percentage. Equity filtering lands with
+        # the deal-score wiring; until then, results rank by match score.
 
         # 3. Apply tier limit
         max_results = TIER_LIMITS.get(tier)

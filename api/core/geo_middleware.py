@@ -14,8 +14,9 @@ logger = logging.getLogger(__name__)
 # Allowed country codes — expandable
 ALLOWED_COUNTRIES = {"US"}
 
-# Database path — override with GEOLITE_DB env var
-DB_PATH = Path(os.getenv("GEOLITE_DB", "/home/magicofelipe/proptoit/data/geo/GeoLite2-Country.mmdb"))
+# Database path — REQUIRED via GEOLITE_DB env var (no developer-home default).
+# Get a free key and download via: python -m api.core.geo_download
+DB_PATH = Path(os.environ["GEOLITE_DB"]) if os.getenv("GEOLITE_DB") else None
 
 _geo_db = None
 
@@ -23,8 +24,8 @@ _geo_db = None
 def _get_db():
     global _geo_db
     if _geo_db is None:
-        if not DB_PATH.exists():
-            logger.info(f"[geo] Warning: GeoLite2 DB not found at {DB_PATH}")
+        if DB_PATH is None or not DB_PATH.exists():
+            logger.info(f"[geo] Warning: GeoLite2 DB not available (set GEOLITE_DB; got {DB_PATH})")
             logger.info("[geo] Run: python -m api.core.geo_download")
             return None
         try:

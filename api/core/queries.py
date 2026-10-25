@@ -1,8 +1,4 @@
 """
-import logging
-
-logger = logging.getLogger(__name__)
-
 Shared DB query helpers for properties, distress signals, and foreclosures.
 Both the FastAPI routes (core/properties.py) and the MCP server (mcp_server.py)
 call into this module so they cannot drift.
@@ -17,7 +13,20 @@ import psycopg2.extras
 
 from . import market as market_scoring
 
-DB_DSN = os.getenv("DATABASE_URL")
+def _db_dsn() -> str:
+    """Resolve DATABASE_URL at call time — loud error if unset (no default DSN)."""
+    dsn = os.getenv("DATABASE_URL")
+    if not dsn:
+        raise RuntimeError(
+            "DATABASE_URL is not set — queries require an explicit DSN "
+            "(export it, e.g. from the repo .env; no default is shipped)."
+        )
+    return dsn
+
+
+def get_conn():
+    return psycopg2.connect(_db_dsn())
+
 
 SORT_MAP = {
     "distressScore":  "distress_count",
@@ -46,10 +55,6 @@ VALID_SIGNAL_TYPES = set(FLAG_TO_SIGNAL.values())
 KNOWN_COUNTIES = {
     "hamilton": {"name": "Hamilton County", "state": "TN", "region": "Chattanooga"},
 }
-
-
-def get_conn():
-    return psycopg2.connect(DB_DSN)
 
 
 def county_slug(county: Optional[str]) -> str:
@@ -191,12 +196,26 @@ def _build_property_filters(
         conditions.append("p.assessed_value <= %s")
         params.append(max_assessed_value)
     if property_category:
+        # Precedence MUST mirror property_category_for_row / the SQL views:
+        # agricultural wins first (any lot > 1 acre), then exempt (no
+        # building), then commercial (building > 5000 sqft), else residential.
+        # Without the agricultural guard below, a 10-acre mini-warehouse
+        # matched residential AND commercial, inflating category counts.
         if property_category == "residential":
-            conditions.append("p.building_sqft IS NOT NULL AND p.building_sqft <= 5000")
+            conditions.append(
+                "p.building_sqft IS NOT NULL AND p.building_sqft <= 5000"
+                " AND (p.lot_size_sqft IS NULL OR p.lot_size_sqft <= 43560)"
+            )
         elif property_category == "commercial":
-            conditions.append("p.building_sqft IS NOT NULL AND p.building_sqft > 5000")
+            conditions.append(
+                "p.building_sqft IS NOT NULL AND p.building_sqft > 5000"
+                " AND (p.lot_size_sqft IS NULL OR p.lot_size_sqft <= 43560)"
+            )
         elif property_category == "exempt":
-            conditions.append("p.building_sqft IS NULL")
+            conditions.append(
+                "p.building_sqft IS NULL"
+                " AND (p.lot_size_sqft IS NULL OR p.lot_size_sqft <= 43560)"
+            )
         elif property_category == "agricultural":
             conditions.append("p.lot_size_sqft IS NOT NULL AND p.lot_size_sqft > 43560")
 
@@ -251,7 +270,7 @@ def search_properties(
             f"search:limit={limit}",
             f"offset={offset}",
             f"sort={sort_by}:{sort_dir}",
-            f"county={county_id or 'hamilton'}",
+            f"county={county_id or 'all'}",
         ]
         if distress_types:
             cache_key_parts.append(f"distress={','.join(distress_types)}")
@@ -341,12 +360,6 @@ def search_properties(
         cache.set(cache_key, result, ttl=300)
 
     return result
-
-
-def _cache_search_result(cache: object, cache_key: str, result: dict):
-    """Store a search result in the cache."""
-    if cache is not None and cache_key:
-        cache.set(cache_key, result, ttl=300)
 
 
 def get_property_by_parcel_id(parcel_id: str, county_id: Optional[str] = None, cache: Optional[object] = None) -> Optional[dict]:
@@ -768,6 +781,8 @@ def list_fsbo_listings(limit: int = 100, offset: int = 0, county_id: Optional[st
     }
 
 
+# NB: currently unwired — no collector or endpoint calls this yet, but it is
+# the only populator of p.deal_score (kept intentionally).
 def calculate_deal_scores(county_id: Optional[str] = "hamilton") -> int:
     """Calculate deal_score for all properties in a county and persist to DB.
 
@@ -969,8 +984,8 @@ def search_properties_by_category(
                     0,
                     0
                ) AS distress_score,
-               (p.geocoords_point)[0] AS lat,
-               (p.geocoords_point)[1] AS lng
+               (p.geocoords_point)[0] AS lng,
+               (p.geocoords_point)[1] AS lat
         FROM {view_name} p
         LEFT JOIN distress_agg d ON p.id = d.property_id
         {where_sql}
@@ -1249,29 +1264,9 @@ def get_top_deals(limit: int = 50, min_score: int = 50, county_id: Optional[str]
             for item in items:
                 item.update(market_scoring.market_fields_for_score(item.get("dealScore"), context))
             items = [i for i in items if i["marketAdjustedDealScore"] >= min_score]
+            total = len(items)  # recount AFTER the score filter — pre-filter total overcounted
             items.sort(key=lambda i: (-i["marketAdjustedDealScore"], -int(i.get("dealScore") or 0), str(i.get("parcelId"))))
 
             return {"data": items, "total": total, "limit": limit, "offset": 0}
     finally:
         conn.close()
-
-
-# ── Property Appraisal ──
-
-def get_property_appraisal(
-    parcel_id: str,
-    county_id: str = "hamilton",
-    radius_miles: float = 5.0,
-    min_comps: int = 5,
-) -> dict:
-    """Run appraisal analysis on a property.
-    
-    Returns both CMV and ARV using comparable sales.
-    """
-    from core.appraisal import full_appraisal
-    return full_appraisal(
-        parcel_id=parcel_id,
-        county_id=county_id,
-        radius_miles=radius_miles,
-        min_comps=min_comps,
-    )

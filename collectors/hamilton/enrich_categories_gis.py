@@ -222,7 +222,7 @@ def classify_by_heuristics():
         UPDATE properties
         SET property_category = 'residential', updated_at = NOW()
         WHERE county_id = 'hamilton'
-          AND property_category = 'unknown'
+          AND property_category IS NULL
           AND bedrooms IS NOT NULL AND bedrooms > 0;
     """)
     counts['bedrooms'] = int(r) if r.isdigit() else 0
@@ -232,7 +232,7 @@ def classify_by_heuristics():
         UPDATE properties
         SET property_category = 'residential', updated_at = NOW()
         WHERE county_id = 'hamilton'
-          AND property_category = 'unknown'
+          AND property_category IS NULL
           AND building_sqft IS NOT NULL
           AND building_sqft > 0
           AND building_sqft < 2000
@@ -246,7 +246,7 @@ def classify_by_heuristics():
         UPDATE properties
         SET property_category = 'commercial', updated_at = NOW()
         WHERE county_id = 'hamilton'
-          AND property_category = 'unknown'
+          AND property_category IS NULL
           AND (
               (building_sqft IS NOT NULL AND building_sqft >= 3000)
               OR (assessed_value IS NOT NULL AND assessed_value >= 500000)
@@ -259,7 +259,7 @@ def classify_by_heuristics():
         UPDATE properties
         SET property_category = 'residential', updated_at = NOW()
         WHERE county_id = 'hamilton'
-          AND property_category = 'unknown'
+          AND property_category IS NULL
           AND building_sqft = 0
           AND assessed_value IS NOT NULL
           AND assessed_value < 100000;
@@ -271,7 +271,7 @@ def classify_by_heuristics():
         UPDATE properties
         SET property_category = 'commercial', updated_at = NOW()
         WHERE county_id = 'hamilton'
-          AND property_category = 'unknown'
+          AND property_category IS NULL
           AND building_sqft = 0
           AND assessed_value IS NOT NULL
           AND assessed_value >= 100000;
@@ -283,7 +283,7 @@ def classify_by_heuristics():
         UPDATE properties
         SET property_category = 'commercial', updated_at = NOW()
         WHERE county_id = 'hamilton'
-          AND property_category = 'unknown'
+          AND property_category IS NULL
           AND (
             address ILIKE '% SUITE%'
             OR address ILIKE '% STE %'
@@ -323,7 +323,7 @@ def main():
     
     # Pre-enrichment stats
     total = int(docker_psql("SELECT COUNT(*) FROM properties WHERE county_id='hamilton';"))
-    unknown = int(docker_psql("SELECT COUNT(*) FROM properties WHERE county_id='hamilton' AND property_category='unknown';"))
+    unknown = int(docker_psql("SELECT COUNT(*) FROM properties WHERE county_id='hamilton' AND property_category IS NULL;"))
     print(f"\nTotal: {total:,}  Unknown: {unknown:,} ({unknown*100.0/total:.1f}%)")
     
     # Step 1: GIS enrichment for simple-format parcels
@@ -353,7 +353,7 @@ def main():
     
     # Post-enrichment stats
     print("\n--- Results ---")
-    unknown_after = int(docker_psql("SELECT COUNT(*) FROM properties WHERE county_id='hamilton' AND property_category='unknown';"))
+    unknown_after = int(docker_psql("SELECT COUNT(*) FROM properties WHERE county_id='hamilton' AND property_category IS NULL;"))
     print(f"Remaining unknown: {unknown_after:,}")
     
     show_distribution()

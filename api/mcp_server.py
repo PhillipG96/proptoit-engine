@@ -1,8 +1,4 @@
 """
-import logging
-
-logger = logging.getLogger(__name__)
-
 PropToIt MCP server — exposes read-only property intelligence tools over stdio.
 
 Run:
@@ -390,9 +386,9 @@ def get_foreclosure_stats(
     """
     capped_days = max(0, min(int(days_ahead), 365))
     return json.dumps({
-        "at_risk": queries.count_foreclosures(status="at_risk", days_ahead=capped_days),
-        "upcoming": queries.count_foreclosures(status="upcoming", days_ahead=capped_days),
-        "active": queries.count_foreclosures(status="active", days_ahead=capped_days),
+        "at_risk": queries.count_foreclosures(status="at_risk", days_ahead=capped_days, county_id=county_id),
+        "upcoming": queries.count_foreclosures(status="upcoming", days_ahead=capped_days, county_id=county_id),
+        "active": queries.count_foreclosures(status="active", days_ahead=capped_days, county_id=county_id),
     }, indent=2)
 
 

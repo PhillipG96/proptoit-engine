@@ -7,10 +7,11 @@ import logging
 import re
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
 
 from . import queries
+from .gate import require_pro_license
 from cache import cache
 from sanitize import (
     sanitize_query_param, sanitize_list_param, sanitize_number,
@@ -342,7 +343,7 @@ def list_agricultural(
                           county_id)
 
 
-@router.get("/{parcel_id}/analysis")
+@router.get("/{parcel_id}/analysis", dependencies=[Depends(require_pro_license)])
 def get_property_analysis(
     parcel_id: str,
     county_id: Optional[str] = Query(default="hamilton"),

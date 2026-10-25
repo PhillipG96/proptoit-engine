@@ -1,17 +1,16 @@
-"""
-Curated Deal Feed — verified distressed properties, ranked.
+"""Curated Deal Feed — verified distressed properties, ranked.
 
 Backed entirely by verified signals (tax_delinquent via the county
 CTRUDELQ file, probate via published notices). Every property returned
 carries source attribution and provenance dates. No heuristic signals
 exist in the pipeline, so everything shown is real.
 
-Endpoint: GET /api/deals
+Plain helper functions only — deliberately NOT exposed as an HTTP router
+(pro computations may not leak over HTTP un-gated; see api/core/gate.py).
 """
 import logging
 from typing import Optional, Dict, Any
 
-from fastapi import APIRouter, Query
 import http.client
 import json
 import os
@@ -19,8 +18,6 @@ import os
 from api.sanitize import sanitize_query_param, sanitize_number
 
 logger = logging.getLogger(__name__)
-
-router = APIRouter()
 
 MEILI_HOST = os.getenv("MEILI_HOST", "localhost")
 MEILI_PORT = int(os.getenv("MEILI_PORT", "7707"))
@@ -64,12 +61,17 @@ SOURCE_ATTRIBUTION = {
 
 def _meili_search(body: dict) -> dict:
     conn = http.client.HTTPConnection(MEILI_HOST, MEILI_PORT, timeout=10)
-    conn.request("POST", f"/indexes/{MEILI_INDEX}/search", json.dumps(body),
-                 headers={"Content-Type": "application/json",
-                          "Authorization": f"Bearer {_meili_key()}"})
-    data = json.loads(conn.getresponse().read().decode())
-    conn.close()
-    return data
+    try:
+        conn.request("POST", f"/indexes/{MEILI_INDEX}/search", json.dumps(body),
+                     headers={"Content-Type": "application/json",
+                              "Authorization": f"Bearer {_meili_key()}"})
+        resp = conn.getresponse()
+        raw = resp.read()
+        if resp.status != 200:
+            raise RuntimeError(f"Meilisearch search failed (HTTP {resp.status})")
+        return json.loads(raw.decode())
+    finally:
+        conn.close()
 
 
 def _signal_types(h: dict) -> list:
@@ -116,16 +118,12 @@ def _format_deal(h: dict) -> dict:
     }
 
 
-@router.get("")
-@router.get("/")
 def deals_feed(
-    signal: Optional[str] = Query(default=None,
-        description="Filter: tax_delinquent | probate | pre_foreclosure"),
-    min_deal_score: int = Query(default=0, ge=0, le=100),
-    min_equity: Optional[int] = Query(default=None, ge=0,
-        description="Minimum estimated equity ($) — assessed_value minus last_sale_price"),
-    limit: int = Query(default=25, ge=1, le=100),
-    offset: int = Query(default=0, ge=0),
+    signal: Optional[str] = None,
+    min_deal_score: int = 0,
+    min_equity: Optional[int] = None,
+    limit: int = 25,
+    offset: int = 0,
 ) -> Dict[str, Any]:
     """Curated feed of verified distressed properties, ranked by deal score."""
     signal = sanitize_query_param(signal, max_length=40) if signal else None
@@ -177,7 +175,6 @@ def deals_feed(
     }
 
 
-@router.get("/stats")
 def deals_stats() -> Dict[str, Any]:
     """Aggregate counts for the deal feed header."""
     data = _meili_search({"q": "", "facets": ["is_tax_delinquent", "probate_flag",
