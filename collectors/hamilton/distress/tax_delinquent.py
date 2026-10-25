@@ -25,7 +25,8 @@ import psycopg2.extras
 from dotenv import load_dotenv
 load_dotenv()
 
-sys.path.insert(0, "/home/magicofelipe/proptoit")
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parents[3]))  # repo root
 
 def db_dsn() -> str:
     """Resolve the target DSN at call time — no hardcoded default.

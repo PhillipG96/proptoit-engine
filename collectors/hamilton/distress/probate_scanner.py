@@ -44,10 +44,10 @@ CACHE_PATH = "/tmp/proptoit/probate.cache"
 OUTPUT_PATH = "/tmp/proptoit/probate.json"
 MAX_HTML_SIZE = 50000
 
-# Local HTML backup files (optional — used when network unavailable)
+# Local HTML backup files (optional — used when network unavailable).
+# Point PROBATE_LOCAL_HTML at backup files to use (os.pathsep-separated).
 LOCAL_HTML_FILES = [
-    "/home/magicofelipe/tmp/probate_hamilton.html",
-    "/home/magicofelipe/tmp/probate_news.html",
+    p for p in os.environ.get("PROBATE_LOCAL_HTML", "").split(os.pathsep) if p.strip()
 ]
 
 

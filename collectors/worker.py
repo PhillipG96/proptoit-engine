@@ -7,6 +7,7 @@ Working on: PRO-5 [W5-6] Foreclosure auction + FSBO ingestion, probate scraper v
 import json
 import subprocess
 from datetime import datetime, timezone
+from pathlib import Path
 
 AGENT_ID = "50f141e0-63b7-4edb-8a40-3fed99c9a81d"
 COMPANY_ID = "06101ebf-37ac-49bf-8b40-7119c0c964f0"
@@ -73,7 +74,7 @@ def main():
         print(f"\n  Running {collector}...")
         result = subprocess.run(
             ["python3", collector, "--dry-run"],
-            cwd="/home/magicofelipe/proptoit-mvp/collectors",
+            cwd=str(Path(__file__).resolve().parent),
             capture_output=True, text=True, timeout=30
         )
         output = result.stdout.strip()
@@ -92,7 +93,7 @@ def main():
         print(f"  Running {collector} (real)...")
         result = subprocess.run(
             ["python3", collector],
-            cwd="/home/magicofelipe/proptoit-mvp/collectors",
+            cwd=str(Path(__file__).resolve().parent),
             capture_output=True, text=True, timeout=30
         )
         real_results[collector] = {

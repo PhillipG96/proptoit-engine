@@ -68,18 +68,20 @@ USE_CODE_MAP = {
 
 def classify_by_use_code(cur, conn):
     """Classify properties with non-empty current_use codes."""
-    placeholders = ", ".join(f"'{k}'" for k in USE_CODE_MAP.keys())
-    case_expr = "CASE current_use " + " ".join(
-        f"WHEN '{k}' THEN '{v}'" for k, v in USE_CODE_MAP.items()
-    ) + " END"
+    # Values bound as parameters — USE_CODE_MAP is an internal constant, but
+    # nothing from it ever becomes SQL text (defense-in-depth).
+    codes = list(USE_CODE_MAP)
+    case_parts = " ".join(["WHEN %s THEN %s"] * len(codes))
+    case_params = [x for pair in USE_CODE_MAP.items() for x in pair]
+    in_placeholders = ", ".join(["%s"] * len(codes))
 
     cur.execute(f"""
         UPDATE properties
-        SET property_category = {case_expr}, updated_at = NOW()
+        SET property_category = CASE current_use {case_parts} END, updated_at = NOW()
         WHERE county_id = 'hamilton'
           AND property_category IS NULL
-          AND current_use IN ({placeholders})
-    """)
+          AND current_use IN ({in_placeholders})
+    """, case_params + codes)
     updated = cur.rowcount
     conn.commit()
     return updated

@@ -26,8 +26,9 @@ import urllib.request
 
 import psycopg2
 import psycopg2.extras
+from pathlib import Path
 
-sys.path.insert(0, "/home/magicofelipe/proptoit")
+sys.path.insert(0, str(Path(__file__).resolve().parents[3]))  # repo root
 
 from dotenv import load_dotenv
 load_dotenv()

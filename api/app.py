@@ -73,9 +73,15 @@ def get_allowed_origins() -> list[str]:
     validated = [o for o in origins if validate_origin(o)]
     if not validated:
         validated = ["https://proptoit.com"]  # safe default
-    # Dev/mobile origins only outside production (hardcoded LAN IP removed)
+    # Dev origins only outside production. Starlette matches origins
+    # literally, so wildcard patterns like "http://localhost:*" never match —
+    # enumerate explicit ports instead (more via PROPTOIT_ALLOWED_ORIGINS).
     if not IS_PRODUCTION:
-        validated.extend(["exp://*", "http://localhost:*", "http://127.0.0.1:*"])
+        validated.extend([
+            "http://localhost:3000", "http://localhost:5173",
+            "http://localhost:8080", "http://127.0.0.1:3000",
+            "http://127.0.0.1:5173", "http://127.0.0.1:8080",
+        ])
     return validated
 
 ALLOWED_ORIGINS = get_allowed_origins()

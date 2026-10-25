@@ -29,8 +29,9 @@ import time
 
 import psycopg2
 import psycopg2.extras
+from pathlib import Path
 
-sys.path.insert(0, "/home/magicofelipe/proptoit")
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))  # repo root
 
 from collectors.geocoding.addresses import is_numbered, normalize_address
 from collectors.geocoding.census import census_batch
@@ -51,7 +52,7 @@ def db_dsn() -> str:
     if not dsn:
         raise SystemExit("DATABASE_URL environment variable is required (export it before running)")
     return dsn
-CHECKPOINT_FILE = "/home/magicofelipe/proptoit/.geocode_checkpoint"
+CHECKPOINT_FILE = os.getenv("GEOCODE_CHECKPOINT", str(Path(__file__).resolve().parents[2] / ".geocode_checkpoint"))
 COUNTY_ID = "hamilton"
 COUNTY_NAME = "Hamilton County, TN"
 

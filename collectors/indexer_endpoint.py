@@ -11,6 +11,7 @@ import hmac
 import os
 import subprocess
 import json
+from pathlib import Path
 from http.server import HTTPServer, BaseHTTPRequestHandler
 
 INDEXER_TOKEN = os.getenv("INDEXER_TOKEN")
@@ -34,7 +35,7 @@ class IndexerHandler(BaseHTTPRequestHandler):
             return
         if self.path == '/index':
             result = subprocess.run(
-                ['bash', '/home/magicofelipe/proptoit/collectors/meili_indexer.sh'],
+                ['bash', str(Path(__file__).resolve().parent / "meili_indexer.sh")],
                 capture_output=True, text=True, timeout=300
             )
             response = {

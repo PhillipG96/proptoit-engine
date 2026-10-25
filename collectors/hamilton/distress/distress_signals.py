@@ -19,8 +19,9 @@ import sys
 import argparse
 import psycopg2
 import psycopg2.extras
+from pathlib import Path
 
-sys.path.insert(0, "/home/magicofelipe/proptoit")
+sys.path.insert(0, str(Path(__file__).resolve().parents[3]))  # repo root
 from collectors.base import normalize_record, get_scraped_at
 
 from dotenv import load_dotenv
@@ -133,7 +134,7 @@ def upsert_signals(conn, records, signal_type, dry_run=False):
     count = 0
     if not dry_run:
         with conn.cursor() as cur:
-            cur.execute(f"DELETE FROM distress_signals WHERE signal_type = '{signal_type}'")
+            cur.execute("DELETE FROM distress_signals WHERE signal_type = %s", (signal_type,))
         conn.commit()
 
     for record in records:

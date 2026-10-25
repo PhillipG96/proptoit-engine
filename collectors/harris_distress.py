@@ -23,6 +23,7 @@ from urllib.request import urlopen, Request
 
 import psycopg2
 import psycopg2.extras
+from psycopg2 import sql
 
 from dotenv import load_dotenv
 
@@ -300,13 +301,16 @@ def write_derived_distress(db, distress_records):
             updates['code_violation_flag'] = True
         
         if updates:
-            sets = ', '.join(f'{k} = %s' for k in updates)
+            # Column names come from the fixed mapping above; wrap them in
+            # sql.Identifier so no key ever becomes raw SQL text.
+            sets = sql.SQL(', ').join(
+                sql.SQL('{} = %s').format(sql.Identifier(k)) for k in updates)
             vals = list(updates.values()) + [prop_id]
-            cur.execute(f"""
+            cur.execute(sql.SQL("""
                 UPDATE properties 
-                SET {sets}, updated_at = NOW()
+                SET {}, updated_at = NOW()
                 WHERE id = %s
-            """, vals)
+            """).format(sets), vals)
             updated += 1
     
     db.commit()

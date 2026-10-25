@@ -23,8 +23,9 @@ from urllib.request import urlopen, Request
 
 import psycopg2
 import psycopg2.extras
+from pathlib import Path
 
-sys.path.insert(0, "/home/magicofelipe/proptoit")
+sys.path.insert(0, str(Path(__file__).resolve().parents[3]))  # repo root
 from collectors.base import normalize_record, save_cache, load_cache, get_scraped_at
 
 from dotenv import load_dotenv
